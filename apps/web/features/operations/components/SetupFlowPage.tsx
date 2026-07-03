@@ -24,6 +24,8 @@ const staffSkillColumns = [
 
 type SetupForm = SetupWrite;
 const timeOptions = buildTimeOptions();
+const hourOptions = buildHourOptions();
+const minuteOptions = ["00", "15", "30", "45"];
 
 export function SetupFlowPage({ initialSetup }: { initialSetup?: SetupData | null }) {
   const queryClient = useQueryClient();
@@ -292,13 +294,13 @@ function RequiredStaffSection({
       </div>
       <div className="mt-2 space-y-2">
         {localTemplates.map((item, index) => (
-          <div className="grid grid-cols-[1fr_1fr_72px_32px] gap-2 text-sm" key={index}>
-            <TimeSelect
+          <div className="grid grid-cols-[104px_104px_72px_32px] gap-2 text-sm" key={index}>
+            <SplitTimeSelect
               label="開始時刻"
               onChange={(value) => commitTemplate(index, "start_time", value)}
               value={String(item.start_time)}
             />
-            <TimeSelect
+            <SplitTimeSelect
               label="終了時刻"
               onChange={(value) => commitTemplate(index, "end_time", value)}
               value={String(item.end_time)}
@@ -526,6 +528,89 @@ function TimeSelect({
   );
 }
 
+function SplitTimeSelect({
+  disabled = false,
+  label,
+  onChange,
+  value
+}: {
+  disabled?: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const normalizedValue = normalizeSplitTimeValue(value);
+  const [selectedHour, selectedMinute] = normalizedValue.split(":");
+
+  return (
+    <div
+      className="relative inline-block w-24 text-left"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        aria-expanded={open}
+        aria-label={label}
+        className="flex h-9 w-full items-center justify-between rounded border bg-white px-2 text-sm font-medium shadow-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span>{normalizedValue}</span>
+        <span className="text-xs text-neutral-400">▼</span>
+      </button>
+      {open && !disabled && (
+        <div
+          className="absolute left-0 z-30 mt-1 grid w-32 grid-cols-[1fr_52px] overflow-hidden rounded border bg-white shadow-lg"
+          role="listbox"
+        >
+          <div className="max-h-56 overflow-y-auto border-r py-1">
+            {hourOptions.map((hour) => (
+              <button
+                aria-selected={hour === selectedHour}
+                className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-100 ${
+                  hour === selectedHour ? "bg-neutral-950 text-white hover:bg-neutral-950" : ""
+                }`}
+                key={hour}
+                onClick={() => onChange(`${hour}:${selectedMinute}`)}
+                onMouseDown={(event) => event.preventDefault()}
+                role="option"
+                type="button"
+              >
+                {hour}時
+              </button>
+            ))}
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            {minuteOptions.map((minute) => (
+              <button
+                aria-selected={minute === selectedMinute}
+                className={`block w-full px-2 py-1.5 text-center text-sm hover:bg-neutral-100 ${
+                  minute === selectedMinute ? "bg-neutral-950 text-white hover:bg-neutral-950" : ""
+                }`}
+                key={minute}
+                onClick={() => {
+                  onChange(`${selectedHour}:${minute}`);
+                  setOpen(false);
+                }}
+                onMouseDown={(event) => event.preventDefault()}
+                role="option"
+                type="button"
+              >
+                {minute}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function buildSetupForm(setup: SetupData): SetupForm {
   const businessHours = normalizeBusinessHours(
     setup.store.business_hours,
@@ -541,7 +626,7 @@ function buildSetupForm(setup: SetupData): SetupForm {
       business_hours: businessHours,
       operational_settings: operationalSettings
     },
-    staff_members: setup.staff_members.map((staff) =>
+    staff_members: sortStaffByEmployeeNumber(setup.staff_members).map((staff) =>
       staffToForm(staff, setup.positions, setup.skill_definitions, setup.staff_skills)
     )
   };
@@ -741,10 +826,23 @@ function buildTimeOptions() {
   });
 }
 
+function buildHourOptions() {
+  return Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
+}
+
 function normalizeTimeValue(value: string) {
   const normalized = value.slice(0, 5);
   if (timeOptions.includes(normalized)) {
     return normalized;
+  }
+  return "09:00";
+}
+
+function normalizeSplitTimeValue(value: string) {
+  const normalized = value.slice(0, 5);
+  const [hour, minute] = normalized.split(":");
+  if (hourOptions.includes(hour) && minuteOptions.includes(minute)) {
+    return `${hour}:${minute}`;
   }
   return "09:00";
 }
@@ -755,6 +853,28 @@ function nextEmployeeNumber(staffMembers: StaffSetupWrite[]) {
     .filter((value) => Number.isFinite(value));
   const next = numbers.length > 0 ? Math.max(...numbers) + 1 : 101;
   return String(next);
+}
+
+function sortStaffByEmployeeNumber<T extends { employee_number: string | null; display_name: string; id: string }>(
+  staffMembers: T[]
+) {
+  return [...staffMembers].sort((first, second) => compareEmployeeNumber(first, second));
+}
+
+function compareEmployeeNumber(
+  first: { employee_number: string | null; display_name: string; id: string },
+  second: { employee_number: string | null; display_name: string; id: string }
+) {
+  const firstNumber = Number.parseInt(first.employee_number ?? "", 10);
+  const secondNumber = Number.parseInt(second.employee_number ?? "", 10);
+  if (Number.isFinite(firstNumber) && Number.isFinite(secondNumber) && firstNumber !== secondNumber) {
+    return firstNumber - secondNumber;
+  }
+  return (first.employee_number ?? first.display_name ?? first.id).localeCompare(
+    second.employee_number ?? second.display_name ?? second.id,
+    "ja",
+    { numeric: true }
+  );
 }
 
 function normalizeSetupForSave(form: SetupWrite): SetupWrite {

@@ -54,7 +54,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
       return;
     }
     setRows(
-      draftQuery.data.staff_members.map((staff) => {
+      sortStaffByEmployeeNumber(draftQuery.data.staff_members).map((staff) => {
         const request = draftQuery.data.shift_requests.find((item) => item.staff_member_id === staff.id);
         return {
           staff_member_id: staff.id,
@@ -98,7 +98,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
   const disabled = saveMutation.isPending || proposalMutation.isPending || !currentScheduleVersionId || draftIsLoading;
   const setup = setupQuery.data;
   const loadError = setupQuery.error ?? draftQuery.error;
-  const staffMembers = draftQuery.data?.staff_members ?? [];
+  const staffMembers = sortStaffByEmployeeNumber(draftQuery.data?.staff_members ?? []);
 
   return (
     <main className="min-h-screen bg-neutral-100 text-neutral-950">
@@ -334,6 +334,28 @@ function updateRow(
 
 function staffLabel(staff?: StaffMember) {
   return staff?.employee_number ?? staff?.display_name ?? "-";
+}
+
+function sortStaffByEmployeeNumber<T extends { employee_number: string | null; display_name: string; id: string }>(
+  staffMembers: T[]
+) {
+  return [...staffMembers].sort((first, second) => compareEmployeeNumber(first, second));
+}
+
+function compareEmployeeNumber(
+  first: { employee_number: string | null; display_name: string; id: string },
+  second: { employee_number: string | null; display_name: string; id: string }
+) {
+  const firstNumber = Number.parseInt(first.employee_number ?? "", 10);
+  const secondNumber = Number.parseInt(second.employee_number ?? "", 10);
+  if (Number.isFinite(firstNumber) && Number.isFinite(secondNumber) && firstNumber !== secondNumber) {
+    return firstNumber - secondNumber;
+  }
+  return (first.employee_number ?? first.display_name ?? first.id).localeCompare(
+    second.employee_number ?? second.display_name ?? second.id,
+    "ja",
+    { numeric: true }
+  );
 }
 
 function staffDisplayName(staff?: StaffMember) {
