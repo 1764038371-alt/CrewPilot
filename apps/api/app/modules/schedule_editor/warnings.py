@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date, time, timedelta
 from uuid import UUID
 
@@ -185,6 +186,9 @@ class WarningService:
             current_start: time | None = None
             current_end: time | None = None
             current_missing: tuple[str, ...] | None = None
+            current_extra: tuple[str, ...] | None = None
+            current_required: tuple[str, ...] | None = None
+            current_actual: dict[str, int] | None = None
             current_active_count: int | None = None
             current_target_segment_id: UUID | None = None
 
@@ -196,18 +200,36 @@ class WarningService:
                     for segment in date_segments
                     if segment.start_time <= slot_start and slot_end <= segment.end_time
                 ]
-                active_codes = {
+                active_codes = [
                     positions_by_id[segment.position_id].code
                     for segment in active_segments
                     if segment.position_id in positions_by_id
-                }
-                missing = tuple(code for code in ("B", "C") if code not in active_codes)
+                ]
+                required_counts = required_position_counts_for_active_count(
+                    len(active_segments),
+                    {position.code for position in positions},
+                )
+                active_counts = Counter(active_codes)
+                missing = tuple(
+                    code
+                    for code in ("B", "C", "F", "S")
+                    for _ in range(max(0, required_counts[code] - active_counts[code]))
+                )
+                extra = tuple(
+                    code
+                    for code in ("B", "C", "F", "S")
+                    for _ in range(max(0, active_counts[code] - required_counts[code]))
+                )
+                required_codes = tuple(required_counts.elements())
 
-                if len(active_segments) < 2 or not missing:
+                if len(active_segments) < 2 or (not missing and not extra):
                     if (
                         current_start is not None
                         and current_end is not None
                         and current_missing is not None
+                        and current_extra is not None
+                        and current_required is not None
+                        and current_actual is not None
                         and current_active_count is not None
                     ):
                         warnings.append(
@@ -217,6 +239,9 @@ class WarningService:
                                 current_start,
                                 current_end,
                                 current_missing,
+                                current_extra,
+                                current_required,
+                                current_actual,
                                 current_active_count,
                                 current_target_segment_id,
                             )
@@ -224,15 +249,27 @@ class WarningService:
                     current_start = None
                     current_end = None
                     current_missing = None
+                    current_extra = None
+                    current_required = None
+                    current_actual = None
                     current_active_count = None
                     current_target_segment_id = None
                     continue
 
-                if current_start is None or current_missing != missing:
+                actual_counts = {code: active_counts[code] for code in ("B", "C", "F", "S")}
+                if (
+                    current_start is None
+                    or current_missing != missing
+                    or current_extra != extra
+                    or current_required != required_codes
+                ):
                     if (
                         current_start is not None
                         and current_end is not None
                         and current_missing is not None
+                        and current_extra is not None
+                        and current_required is not None
+                        and current_actual is not None
                         and current_active_count is not None
                     ):
                         warnings.append(
@@ -242,12 +279,18 @@ class WarningService:
                                 current_start,
                                 current_end,
                                 current_missing,
+                                current_extra,
+                                current_required,
+                                current_actual,
                                 current_active_count,
                                 current_target_segment_id,
                             )
                         )
                     current_start = slot_start
                     current_missing = missing
+                    current_extra = extra
+                    current_required = required_codes
+                    current_actual = actual_counts
                     current_active_count = len(active_segments)
                     current_target_segment_id = active_segments[0].id if active_segments else None
                 current_end = slot_end
@@ -256,6 +299,9 @@ class WarningService:
                 current_start is not None
                 and current_end is not None
                 and current_missing is not None
+                and current_extra is not None
+                and current_required is not None
+                and current_actual is not None
                 and current_active_count is not None
             ):
                 warnings.append(
@@ -265,6 +311,9 @@ class WarningService:
                         current_start,
                         current_end,
                         current_missing,
+                        current_extra,
+                        current_required,
+                        current_actual,
                         current_active_count,
                         current_target_segment_id,
                     )
@@ -648,10 +697,14 @@ def bc_coverage_warning(
     start_time: time,
     end_time: time,
     missing_positions: tuple[str, ...],
+    extra_positions: tuple[str, ...],
+    required_positions: tuple[str, ...],
+    actual_counts: dict[str, int],
     active_count: int,
     target_segment_id: UUID | None,
 ) -> ScheduleWarning:
-    missing_label = " / ".join(missing_positions)
+    missing_label = " / ".join(missing_positions) if missing_positions else "なし"
+    extra_label = " / ".join(extra_positions) if extra_positions else "なし"
     return ScheduleWarning(
         schedule_version_id=schedule_version_id,
         work_shift_id=None,
@@ -659,8 +712,8 @@ def bc_coverage_warning(
         warning_type="BC_COVERAGE",
         severity="critical",
         message=(
-            f"{missing_label} が不在です。"
-            "全時間帯でB / バリとC / キャッシャーを確保してください。"
+            f"必要ポジション構成が崩れています。不足: {missing_label} / 余剰: {extra_label}。"
+            "人数に応じてBC、BCF、BCFS、またはB(ST)/B(SH)/C/F/Sを確保してください。"
         ),
         details={
             "date": work_date.isoformat(),
@@ -669,9 +722,41 @@ def bc_coverage_warning(
             "current_count": active_count,
             "min_staff_count": 2,
             "missing_position_codes": list(missing_positions),
-            "required_position_codes": ["B", "C"],
+            "extra_position_codes": list(extra_positions),
+            "actual_position_counts": actual_counts,
+            "required_position_codes": list(required_positions),
         },
     )
+
+
+def required_position_counts_for_active_count(
+    active_count: int,
+    available_codes: set[str],
+) -> Counter[str]:
+    if active_count < 2:
+        return Counter()
+    if active_count == 2:
+        preferred = ["B", "C"]
+    elif active_count == 3:
+        preferred = ["B", "C", "F"]
+    elif active_count == 4:
+        preferred = ["B", "C", "F", "S"]
+    else:
+        preferred = ["B", "B", "C", "F", "S"]
+
+    result = [code for code in preferred if code in available_codes]
+    fallback_codes = ["S", "F", "B", "C"] if active_count > 5 else ["B", "C", "F", "S"]
+    while len(result) < active_count:
+        added = False
+        for code in fallback_codes:
+            if code in available_codes:
+                result.append(code)
+                added = True
+                if len(result) == active_count:
+                    break
+        if not added:
+            break
+    return Counter(result[:active_count])
 
 
 def minutes_between(start_time: time, end_time: time) -> int:

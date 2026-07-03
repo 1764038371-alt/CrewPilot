@@ -23,7 +23,6 @@ const staffSkillColumns = [
 ] as const;
 
 type SetupForm = SetupWrite;
-const timeOptions = buildTimeOptions();
 const hourOptions = buildHourOptions();
 const minuteOptions = ["00", "15", "30", "45"];
 
@@ -496,44 +495,19 @@ function TimeInput({ label, onChange, value }: { label: string; onChange: (value
   return (
     <label className="block text-sm">
       <span className="text-xs text-neutral-500">{label}</span>
-      <TimeSelect className="mt-1 w-full" label={label} onChange={onChange} value={value} />
+      <SplitTimeSelect className="mt-1 w-full" label={label} onChange={onChange} value={value} />
     </label>
   );
 }
 
-function TimeSelect({
-  className = "w-full",
-  label,
-  onChange,
-  value
-}: {
-  className?: string;
-  label: string;
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <select
-      aria-label={label}
-      className={`${className} rounded border px-2 py-1`}
-      onChange={(event) => onChange(event.target.value)}
-      value={normalizeTimeValue(value)}
-    >
-      {timeOptions.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 function SplitTimeSelect({
+  className = "w-24",
   disabled = false,
   label,
   onChange,
   value
 }: {
+  className?: string;
   disabled?: boolean;
   label: string;
   onChange: (value: string) => void;
@@ -545,7 +519,7 @@ function SplitTimeSelect({
 
   return (
     <div
-      className="relative inline-block w-24 text-left"
+      className={`relative inline-block text-left ${className}`}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setOpen(false);
@@ -626,10 +600,27 @@ function buildSetupForm(setup: SetupData): SetupForm {
       business_hours: businessHours,
       operational_settings: operationalSettings
     },
-    staff_members: sortStaffByEmployeeNumber(setup.staff_members).map((staff) =>
-      staffToForm(staff, setup.positions, setup.skill_definitions, setup.staff_skills)
-    )
+    staff_members: staffMembersToForm(setup)
   };
+}
+
+function staffMembersToForm(setup: SetupData): StaffSetupWrite[] {
+  const usedNumbers = new Set<string>();
+  return sortStaffByEmployeeNumber(setup.staff_members).map((staff) => {
+    const rawNumber = (staff.employee_number ?? "").trim();
+    const employeeNumber =
+      isUsableEmployeeNumber(rawNumber, usedNumbers)
+        ? rawNumber
+        : nextAvailableEmployeeNumber(usedNumbers);
+    usedNumbers.add(employeeNumber);
+    return staffToForm(
+      staff,
+      setup.positions,
+      setup.skill_definitions,
+      setup.staff_skills,
+      employeeNumber
+    );
+  });
 }
 
 function normalizeBusinessHours(
@@ -675,7 +666,8 @@ function staffToForm(
   staff: StaffMember,
   positions: Position[],
   skills: SkillDefinition[],
-  staffSkills: StaffSkillRead[]
+  staffSkills: StaffSkillRead[],
+  employeeNumber: string
 ): StaffSetupWrite {
   const skillIds = new Set(staffSkills.filter((item) => item.staff_member_id === staff.id).map((item) => item.skill_definition_id));
   const positionIds = positions
@@ -690,7 +682,7 @@ function staffToForm(
     .map((position) => position.id);
   return {
     id: staff.id,
-    employee_number: staff.employee_number ?? staff.display_name,
+    employee_number: employeeNumber,
     display_name: isGeneratedStaffName(staff.display_name) ? "" : staff.display_name,
     employment_type: staff.employment_type,
     hourly_wage_yen: staff.hourly_wage_yen,
@@ -817,25 +809,8 @@ function updateTemplate(
   return setRequiredTemplates(form, dayType, templates);
 }
 
-function buildTimeOptions() {
-  return Array.from({ length: 24 * 4 }, (_, index) => {
-    const totalMinutes = index * 15;
-    const hour = Math.floor(totalMinutes / 60);
-    const minute = totalMinutes % 60;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  });
-}
-
 function buildHourOptions() {
   return Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
-}
-
-function normalizeTimeValue(value: string) {
-  const normalized = value.slice(0, 5);
-  if (timeOptions.includes(normalized)) {
-    return normalized;
-  }
-  return "09:00";
 }
 
 function normalizeSplitTimeValue(value: string) {
@@ -853,6 +828,18 @@ function nextEmployeeNumber(staffMembers: StaffSetupWrite[]) {
     .filter((value) => Number.isFinite(value));
   const next = numbers.length > 0 ? Math.max(...numbers) + 1 : 101;
   return String(next);
+}
+
+function isUsableEmployeeNumber(value: string, usedNumbers: Set<string>) {
+  return /^\d+$/.test(value) && !usedNumbers.has(value);
+}
+
+function nextAvailableEmployeeNumber(usedNumbers: Set<string>) {
+  let candidate = 101;
+  while (usedNumbers.has(String(candidate))) {
+    candidate += 1;
+  }
+  return String(candidate);
 }
 
 function sortStaffByEmployeeNumber<T extends { employee_number: string | null; display_name: string; id: string }>(
@@ -878,13 +865,19 @@ function compareEmployeeNumber(
 }
 
 function normalizeSetupForSave(form: SetupWrite): SetupWrite {
+  const usedNumbers = new Set<string>();
   return {
     ...form,
-    staff_members: form.staff_members.map((staff, index) => {
-      const fallbackNumber = staff.employee_number.trim() || nextEmployeeNumber(form.staff_members.slice(0, index));
+    staff_members: form.staff_members.map((staff) => {
+      const rawNumber = staff.employee_number.trim();
+      const employeeNumber =
+        isUsableEmployeeNumber(rawNumber, usedNumbers)
+          ? rawNumber
+          : nextAvailableEmployeeNumber(usedNumbers);
+      usedNumbers.add(employeeNumber);
       return {
         ...staff,
-        employee_number: fallbackNumber,
+        employee_number: employeeNumber,
         display_name: staff.display_name.trim(),
         hourly_wage_yen: staff.hourly_wage_yen ?? null
       };

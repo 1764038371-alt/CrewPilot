@@ -29,7 +29,7 @@ from app.modules.stores.models import Position, SkillDefinition, StaffSkill, Sto
 MIN_POSITION_BLOCK_MINUTES = 60
 IDEAL_POSITION_BLOCK_MINUTES = 120
 SOFT_MAX_POSITION_BLOCK_MINUTES = 150
-HARD_MAX_POSITION_BLOCK_MINUTES = 180
+HARD_MAX_POSITION_BLOCK_MINUTES = 150
 
 
 @dataclass(frozen=True)
@@ -737,53 +737,7 @@ class ORToolsSolver(ScheduleSolver):
             staff_skills,
             task_types,
         )
-        for segments in planned.values():
-            self._absorb_short_work_segments(segments)
-        self._ensure_break_coverage_positions(
-            planned,
-            positions_by_code,
-            skills,
-            staff_skills,
-        )
-        for staff_member_id, segments in planned.items():
-            self._split_overlong_work_segments(
-                staff_member_id,
-                segments,
-                positions_by_code,
-                skills,
-                staff_skills,
-            )
-        for segments in planned.values():
-            self._absorb_short_work_segments(segments)
-        self._ensure_break_coverage_positions(
-            planned,
-            positions_by_code,
-            skills,
-            staff_skills,
-        )
-        for staff_member_id, segments in planned.items():
-            self._split_overlong_work_segments(
-                staff_member_id,
-                segments,
-                positions_by_code,
-                skills,
-                staff_skills,
-            )
-        for segments in planned.values():
-            self._smooth_short_work_fragments(segments)
-        self._ensure_break_coverage_positions(
-            planned,
-            positions_by_code,
-            skills,
-            staff_skills,
-        )
-        for segments in planned.values():
-            self._smooth_short_work_fragments(
-                segments,
-                skip_break_adjacent=True,
-                require_same_work_neighbors=True,
-            )
-        self._enforce_exact_position_mix(
+        self._rebuild_work_positions_by_exact_mix(
             planned,
             positions_by_code,
             skills,
@@ -1145,11 +1099,13 @@ class ORToolsSolver(ScheduleSolver):
                 )
 
     def _break_plan_for_shift(self, shift_minutes: int) -> list[tuple[int, float]]:
-        if shift_minutes <= 210:
+        if shift_minutes < 240:
             return []
         if shift_minutes < 360:
             return [(15, 0.5)]
-        return [(15, 0.35), (30, 0.65)]
+        if shift_minutes < 480:
+            return [(15, 0.35), (30, 0.65)]
+        return [(30, 0.35), (30, 0.65)]
 
     def _choose_break_window(
         self,
@@ -1652,6 +1608,106 @@ class ORToolsSolver(ScheduleSolver):
             and end_time <= segment["end_time"]
         ]
 
+    def _rebuild_work_positions_by_exact_mix(
+        self,
+        planned: dict[UUID, list[dict]],
+        positions_by_code: dict[str, Position],
+        skills: list[SkillDefinition],
+        staff_skills: list[StaffSkill],
+    ) -> None:
+        boundaries = sorted(
+            {
+                boundary
+                for segments in planned.values()
+                for segment in segments
+                for boundary in (segment["start_time"], segment["end_time"])
+            }
+        )
+        if len(boundaries) < 2:
+            return
+
+        interval_rows: list[tuple[time, time, list[tuple[UUID, dict]]]] = []
+        for start_time, end_time in zip(boundaries, boundaries[1:]):
+            if start_time >= end_time:
+                continue
+            active_work = self._active_work_segments(planned, start_time, end_time)
+            if active_work:
+                interval_rows.append((start_time, end_time, active_work))
+        if not interval_rows:
+            return
+
+        paths: list[tuple[int, dict[UUID, str], dict[UUID, int], list[dict[UUID, str]]]] = [
+            (0, {}, {}, [])
+        ]
+        for start_time, end_time, active_work in interval_rows:
+            start_minute = time_to_minutes(start_time)
+            candidates = self._exact_mix_candidates_for_active_work(
+                active_work,
+                positions_by_code,
+                skills,
+                staff_skills,
+            )
+            if not candidates:
+                candidates = self._best_effort_mix_candidates_for_active_work(
+                    active_work,
+                    positions_by_code,
+                    skills,
+                    staff_skills,
+                )
+
+            next_paths: list[
+                tuple[int, dict[UUID, str], dict[UUID, int], list[dict[UUID, str]]]
+            ] = []
+            for score, previous_codes, previous_started, history in paths:
+                for candidate in candidates:
+                    transition_score, next_started = self._assignment_transition_score(
+                        candidate,
+                        previous_codes,
+                        previous_started,
+                        start_minute,
+                        time_to_minutes(end_time),
+                    )
+                    next_paths.append(
+                        (
+                            score + transition_score,
+                            {**previous_codes, **candidate},
+                            next_started,
+                            [*history, candidate],
+                        )
+                    )
+            paths = sorted(next_paths, key=lambda item: item[0])[:240]
+        if not paths:
+            return
+
+        best_history = min(paths, key=lambda item: item[0])[3]
+        rebuilt: dict[UUID, list[dict]] = {staff_member_id: [] for staff_member_id in planned}
+        for staff_member_id, segments in planned.items():
+            rebuilt[staff_member_id].extend(
+                segment for segment in segments if segment["segment_type"] != "WORK"
+            )
+
+        for (start_time, end_time, active_work), assignment in zip(interval_rows, best_history):
+            for staff_member_id, segment in active_work:
+                position_code = assignment.get(staff_member_id) or segment.get("position_code")
+                position = positions_by_code.get(position_code)
+                if position is None:
+                    continue
+                rebuilt[staff_member_id].append(
+                    {
+                        **segment,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "position_code": position_code,
+                        "position_id": position.id,
+                        "label": None,
+                    }
+                )
+
+        for staff_member_id, segments in rebuilt.items():
+            segments.sort(key=lambda item: item["start_time"])
+            self._merge_adjacent_planned_segments(segments)
+            planned[staff_member_id] = segments
+
     def _enforce_exact_position_mix(
         self,
         planned: dict[UUID, list[dict]],
@@ -1688,13 +1744,12 @@ class ORToolsSolver(ScheduleSolver):
                 staff_skills,
             )
             if not candidates:
-                candidates = [
-                    {
-                        staff_member_id: segment.get("position_code")
-                        for staff_member_id, segment in active_work
-                        if segment.get("position_code") in {"B", "C", "F", "S"}
-                    }
-                ]
+                candidates = self._best_effort_mix_candidates_for_active_work(
+                    active_work,
+                    positions_by_code,
+                    skills,
+                    staff_skills,
+                )
             next_paths: list[
                 tuple[int, dict[UUID, str], dict[UUID, int], list[dict[UUID, str]]]
             ] = []
@@ -1785,6 +1840,69 @@ class ORToolsSolver(ScheduleSolver):
 
         search(0, required_counts, {})
         return candidates
+
+    def _best_effort_mix_candidates_for_active_work(
+        self,
+        active_work: list[tuple[UUID, dict]],
+        positions_by_code: dict[str, Position],
+        skills: list[SkillDefinition],
+        staff_skills: list[StaffSkill],
+    ) -> list[dict[UUID, str]]:
+        required_codes = target_position_codes(len(active_work), positions_by_code)
+        required_counts = Counter(required_codes)
+        position_codes = [
+            code for code in ("B", "C", "F", "S") if code in positions_by_code
+        ]
+        if not position_codes:
+            return []
+
+        staff_options: list[tuple[UUID, dict, list[str]]] = []
+        for staff_member_id, segment in active_work:
+            current_code = segment.get("position_code")
+            options = [
+                code
+                for code in position_codes
+                if self._staff_can_cover_position(
+                    staff_member_id,
+                    positions_by_code[code].id,
+                    skills,
+                    staff_skills,
+                )
+            ]
+            if not options:
+                continue
+            options.sort(
+                key=lambda code: (
+                    required_counts[code] <= 0,
+                    code != current_code,
+                    position_priority_index(code),
+                )
+            )
+            staff_options.append((staff_member_id, segment, options))
+
+        if len(staff_options) != len(active_work):
+            return []
+
+        best: list[tuple[int, dict[UUID, str]]] = []
+        assignment: dict[UUID, str] = {}
+
+        def search(index: int) -> None:
+            if index == len(staff_options):
+                candidate = dict(assignment)
+                score = best_effort_mix_score(candidate, active_work, required_counts)
+                best.append((score, candidate))
+                best.sort(key=lambda item: item[0])
+                del best[48:]
+                return
+
+            staff_member_id, _segment, options = staff_options[index]
+            for code in options:
+                assignment[staff_member_id] = code
+                search(index + 1)
+                assignment.pop(staff_member_id, None)
+
+        search(0)
+        return [candidate for _score, candidate in best[:24]]
 
     def _coverage_reassignment_candidate(
         self,
@@ -1925,14 +2043,7 @@ class ORToolsSolver(ScheduleSolver):
         merged: list[dict] = []
         for segment in sorted(segments, key=lambda item: item["start_time"]):
             previous = merged[-1] if merged else None
-            if (
-                previous is not None
-                and previous["end_time"] == segment["start_time"]
-                and previous["segment_type"] == segment["segment_type"]
-                and previous.get("position_id") == segment.get("position_id")
-                and previous.get("task_type_id") == segment.get("task_type_id")
-                and previous.get("label") == segment.get("label")
-            ):
+            if previous is not None and can_merge_planned_segments(previous, segment):
                 previous["end_time"] = segment["end_time"]
                 continue
             merged.append(segment)
@@ -3870,13 +3981,8 @@ def same_position_duration_penalty(position_code: str, projected_elapsed: int) -
     if projected_elapsed <= SOFT_MAX_POSITION_BLOCK_MINUTES:
         return 0
     over_soft_blocks = (projected_elapsed - SOFT_MAX_POSITION_BLOCK_MINUTES + 14) // 15
-    multiplier = 450 if position_code == "C" else 300
-    penalty = over_soft_blocks * over_soft_blocks * multiplier
-    if projected_elapsed > HARD_MAX_POSITION_BLOCK_MINUTES:
-        over_hard_blocks = (projected_elapsed - HARD_MAX_POSITION_BLOCK_MINUTES + 14) // 15
-        hard_multiplier = 8_000 if position_code == "C" else 5_000
-        penalty += over_hard_blocks * hard_multiplier
-    return penalty
+    multiplier = 1_800_000 if position_code == "C" else 1_200_000
+    return over_soft_blocks * over_soft_blocks * multiplier
 
 
 def position_change_penalty(elapsed: int) -> int:
@@ -3889,6 +3995,32 @@ def position_change_penalty(elapsed: int) -> int:
     if elapsed <= SOFT_MAX_POSITION_BLOCK_MINUTES:
         return 0
     return 50
+
+
+def can_merge_planned_segments(previous: dict, segment: dict) -> bool:
+    if previous["end_time"] != segment["start_time"]:
+        return False
+    if previous["segment_type"] != segment["segment_type"]:
+        return False
+    if previous.get("position_id") != segment.get("position_id"):
+        return False
+    if previous.get("task_type_id") != segment.get("task_type_id"):
+        return False
+    if not labels_can_merge(previous, segment):
+        return False
+    if previous["segment_type"] == "WORK":
+        combined_minutes = minutes_between(previous["start_time"], segment["end_time"])
+        if combined_minutes > SOFT_MAX_POSITION_BLOCK_MINUTES:
+            return False
+    return True
+
+
+def labels_can_merge(previous: dict, segment: dict) -> bool:
+    previous_label = previous.get("label")
+    segment_label = segment.get("label")
+    if previous.get("position_code") == "B" or segment.get("position_code") == "B":
+        return previous_label == segment_label
+    return (previous_label or None) == (segment_label or None)
 
 
 def short_interval_change_penalty(interval_minutes: int) -> int:
@@ -4138,7 +4270,7 @@ def target_position_codes(
     for code in preferred:
         if code in positions_by_code:
             result.append(code)
-    fallback_codes = ["B", "C", "F", "S"]
+    fallback_codes = ["S", "F", "B", "C"] if active_staff_count > 5 else ["B", "C", "F", "S"]
     while len(result) < active_staff_count:
         added = False
         for code in fallback_codes:
@@ -4150,6 +4282,31 @@ def target_position_codes(
         if not added:
             break
     return result[:active_staff_count]
+
+
+def best_effort_mix_score(
+    candidate: dict[UUID, str],
+    active_work: list[tuple[UUID, dict]],
+    required_counts: Counter[str],
+) -> int:
+    counts = Counter(candidate.values())
+    score = 0
+    for code in ("B", "C", "F", "S"):
+        missing = max(0, required_counts[code] - counts[code])
+        surplus = max(0, counts[code] - required_counts[code])
+        if code in {"B", "C"}:
+            score += missing * 2_000_000
+            score += surplus * 900_000
+        else:
+            score += missing * 1_000_000
+            score += surplus * 450_000
+
+    for staff_member_id, segment in active_work:
+        current_code = segment.get("position_code")
+        assigned_code = candidate.get(staff_member_id)
+        if assigned_code != current_code:
+            score += 2_000 + position_priority_index(assigned_code or "S") * 50
+    return score
 
 
 def count_changes(changes: list[SolverChange], change_type: str, predicate=None) -> int:

@@ -193,7 +193,7 @@ def test_bc_coverage_warning_detects_missing_b() -> None:
     assert warnings[0].details["missing_position_codes"] == ["B"]
 
 
-def test_bc_coverage_warning_does_not_warn_for_missing_f() -> None:
+def test_position_mix_warning_detects_missing_f_for_three_active_staff() -> None:
     service = WarningService(session=None)  # type: ignore[arg-type]
     shift_ids = [
         UUID("10000000-0000-0000-0000-000000000021"),
@@ -226,11 +226,15 @@ def test_bc_coverage_warning_does_not_warn_for_missing_f() -> None:
         positions=[
             position(POSITION_B_ID, "B"),
             position(POSITION_C_ID, "C"),
+            position(POSITION_F_ID, "F"),
             position(POSITION_S_ID, "S"),
         ],
     )
 
-    assert warnings == []
+    assert len(warnings) == 1
+    assert warnings[0].warning_type == "BC_COVERAGE"
+    assert warnings[0].details["missing_position_codes"] == ["F"]
+    assert warnings[0].details["extra_position_codes"] == ["S"]
 
 
 def test_position_skill_does_not_accept_opening_skill_for_normal_work() -> None:
@@ -1004,8 +1008,79 @@ def test_request_based_generation_uses_break_rules_by_shift_length() -> None:
 
     assert break_windows_by_staff.get(str(short_staff_id), []) == []
     assert break_durations(break_windows_by_staff[str(middle_staff_id)]) == [15]
-    assert break_durations(break_windows_by_staff[str(long_staff_id)]) == [15, 30]
+    assert break_durations(break_windows_by_staff[str(long_staff_id)]) == [30, 30]
     assert staff_breaks_are_spaced(break_windows_by_staff[str(long_staff_id)])
+
+
+def test_request_based_generation_rebuilds_exact_mix_after_breaks() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    staff_ids = [
+        STAFF_ID,
+        STAFF_SECOND_ID,
+        UUID("30000000-0000-0000-0000-000000000003"),
+        UUID("30000000-0000-0000-0000-000000000004"),
+        UUID("30000000-0000-0000-0000-000000000005"),
+    ]
+
+    changes = solver._build_request_schedule_generation_changes(
+        scope=DateScope(type=OptimizationScopeType.DATE, date=date(2026, 7, 1)),
+        shifts=[],
+        requests=[
+            shift_request(staff_ids[0], start_time=time(6, 45), end_time=time(15, 45)),
+            shift_request(staff_ids[1], start_time=time(6, 45), end_time=time(13, 45)),
+            shift_request(staff_ids[2], start_time=time(9), end_time=time(14)),
+            shift_request(staff_ids[3], start_time=time(9), end_time=time(15)),
+            shift_request(staff_ids[4], start_time=time(12, 30), end_time=time(21, 30)),
+        ],
+        staff_members=[staff_member(staff_id) for staff_id in staff_ids],
+        positions=[
+            position(POSITION_B_ID, "B"),
+            position(POSITION_C_ID, "C"),
+            position(POSITION_F_ID, "F"),
+            position(POSITION_S_ID, "S"),
+        ],
+        skills=[
+            skill(SKILL_B_ID, POSITION_B_ID),
+            skill(SKILL_C_ID, POSITION_C_ID),
+            skill(SKILL_F_ID, POSITION_F_ID),
+            skill(SKILL_S_ID, POSITION_S_ID),
+        ],
+        staff_skills=[
+            staff_skill(skill_id, staff_id)
+            for staff_id in staff_ids
+            for skill_id in [SKILL_B_ID, SKILL_C_ID, SKILL_F_ID, SKILL_S_ID]
+        ],
+        task_types=[],
+    )
+
+    for target_time in [
+        time(7, 30),
+        time(9, 30),
+        time(10, 15),
+        time(12, 45),
+        time(14, 30),
+    ]:
+        assert_exact_position_mix_at(changes, target_time)
+
+    for change in changes:
+        if change.command_type != "CreateWorkShift":
+            continue
+        previous_segment = None
+        for segment in change.command_payload["segments"]:
+            if previous_segment is not None:
+                assert not (
+                    previous_segment["segment_type"] == "WORK"
+                    and segment["segment_type"] == "WORK"
+                    and previous_segment["position_id"] == segment["position_id"]
+                    and previous_segment.get("label") == segment.get("label")
+                    and previous_segment["end_time"] == segment["start_time"]
+                    and segment_payload_minutes(
+                        previous_segment["start_time"],
+                        segment["end_time"],
+                    )
+                    <= 150
+                )
+            previous_segment = segment
 
 
 def test_request_based_generation_rotates_positions_every_two_hours() -> None:
@@ -1253,7 +1328,7 @@ def test_short_work_fragments_are_absorbed_into_adjacent_positions() -> None:
     ]
 
 
-def test_adjacent_same_position_segments_merge_up_to_three_hours() -> None:
+def test_adjacent_same_position_segments_do_not_merge_past_two_and_half_hours() -> None:
     solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
     segments = [
         planned_work("B", POSITION_B_ID, time(18), time(18, 45)),
@@ -1264,7 +1339,8 @@ def test_adjacent_same_position_segments_merge_up_to_three_hours() -> None:
     solver._merge_adjacent_planned_segments(segments)
 
     assert segments == [
-        planned_work("B", POSITION_B_ID, time(18), time(20, 45)),
+        planned_work("B", POSITION_B_ID, time(18), time(18, 45)),
+        planned_work("B", POSITION_B_ID, time(18, 45), time(20, 45)),
         planned_work("C", POSITION_C_ID, time(20, 45), time(21, 30)),
     ]
 
@@ -1290,6 +1366,84 @@ def test_coverage_repair_changes_surplus_c_to_missing_b() -> None:
         "C": 1,
         "F": 1,
     }
+
+
+def test_exact_mix_rebuild_changes_duplicate_c_to_bc() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    planned = {
+        STAFF_ID: [planned_work("C", POSITION_C_ID, time(10), time(12))],
+        STAFF_SECOND_ID: [planned_work("C", POSITION_C_ID, time(10), time(12))],
+    }
+
+    solver._rebuild_work_positions_by_exact_mix(
+        planned,
+        positions_by_code(),
+        all_position_skills(),
+        all_position_staff_skills([STAFF_ID, STAFF_SECOND_ID]),
+    )
+
+    assert planned_position_code_counts_at(planned, time(10, 30)) == {
+        "B": 1,
+        "C": 1,
+    }
+
+
+def test_exact_mix_rebuild_keeps_c_covered_around_breaks() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    third_staff_id = UUID("30000000-0000-0000-0000-000000000003")
+    planned = {
+        STAFF_ID: [
+            planned_work("C", POSITION_C_ID, time(10), time(12, 30)),
+            planned_break(time(12, 30), time(12, 45)),
+            planned_work("C", POSITION_C_ID, time(12, 45), time(15)),
+        ],
+        STAFF_SECOND_ID: [planned_work("B", POSITION_B_ID, time(10), time(15))],
+        third_staff_id: [planned_work("F", POSITION_F_ID, time(10), time(15))],
+    }
+
+    solver._rebuild_work_positions_by_exact_mix(
+        planned,
+        positions_by_code(),
+        all_position_skills(),
+        all_position_staff_skills([STAFF_ID, STAFF_SECOND_ID, third_staff_id]),
+    )
+
+    assert planned_position_code_counts_at(planned, time(12, 35)) == {
+        "B": 1,
+        "C": 1,
+    }
+    assert planned_position_code_counts_at(planned, time(12, 50)) == {
+        "B": 1,
+        "C": 1,
+        "F": 1,
+    }
+
+
+def test_merge_adjacent_planned_segments_keeps_short_same_position_together() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    segments = [
+        planned_work("S", POSITION_S_ID, time(13), time(13, 15)),
+        planned_work("S", POSITION_S_ID, time(13, 15), time(14)),
+    ]
+
+    solver._merge_adjacent_planned_segments(segments)
+
+    assert segments == [planned_work("S", POSITION_S_ID, time(13), time(14))]
+
+
+def test_merge_adjacent_planned_segments_does_not_create_overlong_position_block() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    segments = [
+        planned_work("C", POSITION_C_ID, time(9), time(11)),
+        planned_work("C", POSITION_C_ID, time(11), time(12)),
+    ]
+
+    solver._merge_adjacent_planned_segments(segments)
+
+    assert segments == [
+        planned_work("C", POSITION_C_ID, time(9), time(11)),
+        planned_work("C", POSITION_C_ID, time(11), time(12)),
+    ]
 
 
 def test_coverage_repair_changes_surplus_b_to_missing_c() -> None:
@@ -1550,6 +1704,12 @@ def time_to_int(value: time) -> int:
     return value.hour * 100 + value.minute
 
 
+def segment_payload_minutes(start_value: str, end_value: str) -> int:
+    start_time = time.fromisoformat(start_value)
+    end_time = time.fromisoformat(end_value)
+    return (end_time.hour * 60 + end_time.minute) - (start_time.hour * 60 + start_time.minute)
+
+
 def position(position_id: UUID, code: str = "C") -> SimpleNamespace:
     return SimpleNamespace(id=position_id, code=code)
 
@@ -1589,6 +1749,18 @@ def planned_work(position_code: str, position_id: UUID, start_time: time, end_ti
         "segment_type": "WORK",
         "position_code": position_code,
         "position_id": position_id,
+        "task_type_id": None,
+        "label": None,
+    }
+
+
+def planned_break(start_time: time, end_time: time) -> dict:
+    return {
+        "start_time": start_time,
+        "end_time": end_time,
+        "segment_type": "BREAK",
+        "position_code": None,
+        "position_id": None,
         "task_type_id": None,
         "label": None,
     }
