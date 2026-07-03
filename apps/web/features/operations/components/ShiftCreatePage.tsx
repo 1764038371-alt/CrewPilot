@@ -94,9 +94,11 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
   });
 
   const currentScheduleVersionId = useCurrentScheduleVersionId(planningPeriodId);
-  const draftIsLoading = draftQuery.isFetching || !draftQuery.data;
+  const draftIsLoading = draftQuery.isFetching || (!draftQuery.data && !draftQuery.isError);
   const disabled = saveMutation.isPending || proposalMutation.isPending || !currentScheduleVersionId || draftIsLoading;
   const setup = setupQuery.data;
+  const loadError = setupQuery.error ?? draftQuery.error;
+  const staffMembers = draftQuery.data?.staff_members ?? [];
 
   return (
     <main className="min-h-screen bg-neutral-100 text-neutral-950">
@@ -171,6 +173,16 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
               )}
             </div>
           )}
+          {loadError && (
+            <div className="mt-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div>{shiftCreateLoadErrorMessage(loadError)}</div>
+              {isUnauthorizedApiError(loadError) && (
+                <Link className="mt-2 inline-flex font-medium underline" href="/login">
+                  ログイン画面へ
+                </Link>
+              )}
+            </div>
+          )}
           <div className="mt-4 max-h-[560px] overflow-auto rounded border">
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead className="sticky top-0 z-10 bg-neutral-50 text-xs text-neutral-500 shadow-sm">
@@ -184,6 +196,20 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
                 </tr>
               </thead>
               <tbody>
+                {draftIsLoading && (
+                  <tr>
+                    <td className="border p-6 text-center text-neutral-500" colSpan={6}>
+                      初期設定の従業員を読み込んでいます。
+                    </td>
+                  </tr>
+                )}
+                {!draftIsLoading && !loadError && staffMembers.length === 0 && (
+                  <tr>
+                    <td className="border p-6 text-center text-neutral-500" colSpan={6}>
+                      初期設定で従業員を追加して保存すると、ここに希望入力欄が表示されます。
+                    </td>
+                  </tr>
+                )}
                 {rows.map((row, index) => {
                   const staff = draftQuery.data?.staff_members.find((item) => item.id === row.staff_member_id);
                   return (
@@ -236,6 +262,17 @@ function shiftCreateErrorMessage(error: unknown) {
 
   const detail = formatApiErrorDetail(error);
   return detail ? `保存またはAI提案に失敗しました: ${detail}` : "保存またはAI提案に失敗しました。入力内容を確認してください。";
+}
+
+function shiftCreateLoadErrorMessage(error: unknown) {
+  if (isUnauthorizedApiError(error)) {
+    return "ログイン状態が切れています。従業員の希望入力欄を表示するにはもう一度ログインしてください。";
+  }
+
+  const detail = formatApiErrorDetail(error);
+  return detail
+    ? `初期設定の従業員を読み込めません: ${detail}`
+    : "初期設定の従業員を読み込めません。APIの接続先を確認してから再読み込みしてください。";
 }
 
 function buildPayload(
