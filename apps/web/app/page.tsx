@@ -4,7 +4,11 @@ import type { SetupData } from "@/features/operations/api/operationsApi";
 export const dynamic = "force-dynamic";
 
 async function getInitialSetup(): Promise<SetupData | null> {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const apiBaseUrl =
+    configuredApiBaseUrl && configuredApiBaseUrl !== "same-origin"
+      ? configuredApiBaseUrl
+      : (process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000");
 
   try {
     const response = await fetch(`${apiBaseUrl}/api/setup`, { cache: "no-store" });

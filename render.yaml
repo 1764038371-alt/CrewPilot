@@ -18,7 +18,7 @@ services:
           name: crewpilot-db
           property: connectionString
       - key: ALLOWED_ORIGINS
-        sync: false
+        value: https://crewpilot-web.onrender.com,http://localhost:3000,http://127.0.0.1:3000
       - key: SESSION_COOKIE_SECURE
         value: "true"
       - key: SESSION_COOKIE_SAMESITE
@@ -38,4 +38,6 @@ services:
     dockerContext: .
     envVars:
       - key: NEXT_PUBLIC_API_BASE_URL
+        value: same-origin
+      - key: API_PROXY_TARGET
         value: https://crewpilot-api.onrender.com
