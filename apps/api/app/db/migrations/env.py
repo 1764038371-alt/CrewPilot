@@ -1,14 +1,13 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
 
 from app.core.config import settings
 from app.db import models  # noqa: F401
 from app.db.base import Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.async_database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -29,9 +28,8 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_engine(
+        settings.async_database_url,
         poolclass=pool.NullPool,
     )
 
