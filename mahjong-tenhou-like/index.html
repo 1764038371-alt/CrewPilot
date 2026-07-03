@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tenhou-like Mahjong Table</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="table-shell">
+      <section class="hud topbar">
+        <div class="brand">天鳳風 / Desktop</div>
+        <div id="roomLabel" class="room">東風戦 ロビー C9999</div>
+        <button id="newRoundButton" class="icon-button" title="ルール設定">⚙</button>
+      </section>
+
+      <section id="lobbyOverlay" class="lobby-overlay">
+        <div class="lobby-panel">
+          <div class="lobby-head">
+            <div>
+              <div class="lobby-title">対局設定</div>
+              <div class="lobby-subtitle">ルールと参加形態を選んで開始</div>
+            </div>
+            <button id="closeLobbyButton" class="lobby-close">閉じる</button>
+          </div>
+
+          <div class="rule-grid">
+            <label>
+              <span>試合形式</span>
+              <select id="ruleGameType">
+                <option value="tonpuu">東風戦</option>
+                <option value="hanchan">東南戦</option>
+              </select>
+            </label>
+            <label>
+              <span>参加形態</span>
+              <select id="ruleSeatMode">
+                <option value="player3cpu">Player + CPU3体</option>
+                <option value="cpu4">CPU4体 観戦</option>
+              </select>
+            </label>
+            <label>
+              <span>持ち点</span>
+              <select id="ruleInitialPoints">
+                <option value="25000">25000点持ち</option>
+                <option value="30000">30000点持ち</option>
+              </select>
+            </label>
+            <label>
+              <span>赤ドラ</span>
+              <select id="ruleRedDora">
+                <option value="on">あり</option>
+                <option value="off">なし</option>
+              </select>
+            </label>
+            <label>
+              <span>飛び終了</span>
+              <select id="ruleTobi">
+                <option value="off">なし</option>
+                <option value="on">あり</option>
+              </select>
+            </label>
+            <label>
+              <span>途中流局</span>
+              <select id="ruleAbortiveDraws">
+                <option value="off">なし</option>
+                <option value="on">あり</option>
+              </select>
+            </label>
+            <label>
+              <span>アガリやめ</span>
+              <select id="ruleAgariYame">
+                <option value="off">なし</option>
+                <option value="on">あり</option>
+              </select>
+            </label>
+            <label>
+              <span>CPU攻撃度</span>
+              <select id="ruleCpuAttack">
+                <option value="normal">標準</option>
+                <option value="hard">強め</option>
+                <option value="calm">控えめ</option>
+              </select>
+            </label>
+            <label>
+              <span>CPU学習</span>
+              <select id="ruleCpuLearning">
+                <option value="on">あり</option>
+                <option value="off">なし</option>
+              </select>
+            </label>
+            <label>
+              <span>学習モード</span>
+              <select id="ruleLearningMode">
+                <option value="standard">通常</option>
+                <option value="accelerated">強化</option>
+                <option value="fast">高速</option>
+              </select>
+            </label>
+            <label>
+              <span>CPU自動連戦</span>
+              <select id="ruleAutoSelfPlay">
+                <option value="off">なし</option>
+                <option value="on">あり</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="learning-summary" id="learningSummary">
+            CPU学習: 読み込み中
+          </div>
+
+          <div class="lobby-actions">
+            <button id="openPaifuButton">牌譜を見る</button>
+          </div>
+          <button id="startConfiguredGameButton" class="start-game-button">対局開始</button>
+        </div>
+      </section>
+
+      <section id="paifuOverlay" class="lobby-overlay" hidden>
+        <div class="lobby-panel paifu-panel">
+          <div class="lobby-head">
+            <div>
+              <div class="lobby-title">牌譜</div>
+              <div class="lobby-subtitle">試行番号を入力して保存済みの対局を確認</div>
+            </div>
+            <button id="closePaifuButton" class="lobby-close">閉じる</button>
+          </div>
+          <div class="paifu-search">
+            <input id="paifuNumberInput" type="number" min="1" placeholder="No." />
+            <button id="loadPaifuButton">表示</button>
+          </div>
+          <div id="paifuList" class="paifu-list"></div>
+          <div class="paifu-replay-controls">
+            <select id="paifuRoundSelect"></select>
+            <button id="paifuPrevButton">＜</button>
+            <button id="paifuNextButton">＞</button>
+            <span id="paifuStepLabel">-</span>
+          </div>
+          <pre id="paifuDetail" class="paifu-detail"></pre>
+        </div>
+      </section>
+
+      <section class="table" aria-label="麻雀卓">
+        <div class="seat seat-top">
+          <div id="tag-top" class="player-tag">西 / 対面</div>
+          <div id="hand-top" class="opponent-hand horizontal"></div>
+          <div id="river-top" class="river river-top"></div>
+        </div>
+
+        <div class="seat seat-left">
+          <div id="tag-left" class="player-tag vertical-label">北 / 上家</div>
+          <div id="hand-left" class="opponent-hand vertical"></div>
+          <div id="river-left" class="river river-left"></div>
+        </div>
+
+        <div class="center-panel">
+          <div class="center-score score-top">
+            <span id="wind-top">西</span><strong id="score-top">25000</strong>
+          </div>
+          <div class="center-score score-left">
+            <span id="wind-left">北</span><strong id="score-left">25000</strong>
+          </div>
+          <div class="score-ring">
+            <div class="round" id="roundLabel">東 1 局</div>
+            <div class="honba" id="honbaLabel">0 本場 / 供託 0</div>
+            <div class="timer" id="turnLabel">自分のツモ</div>
+          </div>
+          <div class="center-score score-right">
+            <span id="wind-right">南</span><strong id="score-right">25000</strong>
+          </div>
+          <div class="center-score score-bottom">
+            <span id="wind-bottom">東</span><strong id="score-bottom">25000</strong>
+          </div>
+          <div class="wall-count"><span id="wallCount">70</span> 枚</div>
+        </div>
+
+        <div class="dora-panel">
+          <span>ドラ表示牌</span>
+          <div id="doraIndicator" class="dora-tile"></div>
+          <span id="doraActual" class="dora-actual"></span>
+        </div>
+
+        <div class="seat seat-right">
+          <div id="tag-right" class="player-tag vertical-label">南 / 下家</div>
+          <div id="hand-right" class="opponent-hand vertical"></div>
+          <div id="river-right" class="river river-right"></div>
+        </div>
+
+        <div class="seat seat-bottom">
+          <div id="river-bottom" class="river river-bottom"></div>
+          <div class="player-panel">
+            <div id="tag-bottom" class="player-name">東 / Player</div>
+            <div class="actions">
+              <button id="drawButton">自動ツモ</button>
+              <button id="tsumoButton">ツモ和了</button>
+              <button id="ronButton">ロン</button>
+              <button id="kanButton">槓</button>
+              <button id="noCallButton">鳴きなし</button>
+              <button id="autoWinButton" aria-pressed="false">自動和了</button>
+              <button id="riichiButton">リーチ</button>
+              <button id="sortButton">理牌</button>
+              <button id="waitToggleButton" aria-pressed="true">待ち表示</button>
+            </div>
+          </div>
+          <div id="callPanel" class="call-panel" hidden></div>
+          <div id="waitPanel" class="wait-panel" hidden></div>
+          <div class="hand-row">
+            <div id="hand-bottom" class="hand" aria-label="自分の手牌"></div>
+            <div id="melds-bottom" class="melds" aria-label="自分の副露"></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="bottom-command">
+        <button id="endButton">終了</button>
+        <button id="playerButton">Player</button>
+        <button id="roundButton">Round</button>
+        <button id="gameTypeButton">東風戦</button>
+        <button id="pauseButton">停止</button>
+        <button id="resumeButton">再開</button>
+          <button id="stepButton">Step</button>
+          <div id="viewSwitch" class="view-switch" hidden>
+            <button data-view-seat="bottom">CPU-A</button>
+            <button data-view-seat="right">CPU-B</button>
+            <button data-view-seat="top">CPU-C</button>
+            <button data-view-seat="left">CPU-D</button>
+          </div>
+          <button id="helpButton">?</button>
+        <div id="messageLog" class="message-log">牌をクリックして打牌できます。</div>
+      </footer>
+
+      <section id="scoreOverlay" class="score-overlay" hidden>
+        <div class="score-result">
+          <div class="result-title" id="resultTitle">和了</div>
+          <div class="result-detail" id="resultDetail"></div>
+          <div class="result-hand" id="resultHand"></div>
+          <div class="result-yaku" id="resultYaku"></div>
+          <div class="result-scores" id="resultScores"></div>
+          <button id="nextRoundButton">次局へ</button>
+        </div>
+      </section>
+
+      <section id="drawOverlay" class="score-overlay" hidden>
+        <div class="score-result">
+          <div class="result-title">流局</div>
+          <div class="result-detail" id="drawDetail"></div>
+          <div class="result-scores" id="drawScores"></div>
+          <div class="ok-status" id="drawOkStatus"></div>
+          <button id="drawOkButton">OK</button>
+        </div>
+      </section>
+
+      <section id="exitConfirmOverlay" class="score-overlay" hidden>
+        <div class="score-result">
+          <div class="result-title">対局終了</div>
+          <div class="result-detail">対局を終了してメニュー画面へ戻りますか？</div>
+          <div class="dialog-actions">
+            <button id="confirmExitButton">OK</button>
+            <button id="cancelExitButton">キャンセル</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./js/core/state.js"></script>
+    <script src="./js/core/setup.js"></script>
+    <script src="./js/game/round-flow.js"></script>
+    <script src="./js/game/paifu.js"></script>
+    <script src="./js/ai/cpu.js"></script>
+    <script src="./js/game/draw-flow.js"></script>
+    <script src="./js/ui/render.js"></script>
+    <script src="./js/game/actions.js"></script>
+    <script src="./js/hand/hand-analysis.js"></script>
+    <script src="./js/scoring/agari.js"></script>
+    <script src="./js/game/results.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

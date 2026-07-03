@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crewpilot-api"
+version = "0.1.0"
+description = "CrewPilot FastAPI backend"
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic-settings>=2.4.0",
+  "sqlalchemy>=2.0.0",
+  "greenlet>=3.0.0",
+  "psycopg[binary]>=3.2.0",
+  "alembic>=1.13.0",
+  "ortools>=9.15.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "httpx>=0.27.0",
+  "ruff>=0.6.0",
+  "mypy>=1.11.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/db/migrations/versions/*.py" = ["E501", "I001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
