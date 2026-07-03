@@ -16,4 +16,4 @@ RUN pnpm --dir apps/web build
 
 WORKDIR /app/apps/web
 
-CMD ["sh", "-c", "pnpm start -- -p ${PORT:-3000}"]
+CMD ["sh", "-c", "pnpm exec next start -p ${PORT:-3000}"]
