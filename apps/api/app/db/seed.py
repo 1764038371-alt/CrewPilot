@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from app.db import models  # noqa: F401
 from app.db.session import AsyncSessionLocal
 from app.modules.planning.models import PlanningPeriod, ShiftRequirement
 from app.modules.schedule.models import ScheduleVersion, ShiftSegment, WorkShift

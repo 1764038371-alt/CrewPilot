@@ -50,13 +50,13 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_user_sessions_user_id"), "user_sessions", ["user_id"], unique=False)
     op.add_column("schedule_change_logs", sa.Column("executed_by_user_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_foreign_key(op.f("fk_schedule_change_logs_executed_by_user_id_users"), "schedule_change_logs", "users", ["executed_by_user_id"], ["id"], ondelete="SET NULL")
+    op.create_foreign_key("fk_schedule_change_logs_executed_by_user_id_users", "schedule_change_logs", "users", ["executed_by_user_id"], ["id"], ondelete="SET NULL")
     op.add_column("schedule_versions", sa.Column("published_by_user_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_foreign_key(op.f("fk_schedule_versions_published_by_user_id_users"), "schedule_versions", "users", ["published_by_user_id"], ["id"], ondelete="SET NULL")
+    op.create_foreign_key("fk_schedule_versions_published_by_user_id_users", "schedule_versions", "users", ["published_by_user_id"], ["id"], ondelete="SET NULL")
     op.add_column("work_shifts", sa.Column("locked_by_user_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_foreign_key(op.f("fk_work_shifts_locked_by_user_id_users"), "work_shifts", "users", ["locked_by_user_id"], ["id"], ondelete="SET NULL")
+    op.create_foreign_key("fk_work_shifts_locked_by_user_id_users", "work_shifts", "users", ["locked_by_user_id"], ["id"], ondelete="SET NULL")
     op.add_column("shift_segments", sa.Column("locked_by_user_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_foreign_key(op.f("fk_shift_segments_locked_by_user_id_users"), "shift_segments", "users", ["locked_by_user_id"], ["id"], ondelete="SET NULL")
+    op.create_foreign_key("fk_shift_segments_locked_by_user_id_users", "shift_segments", "users", ["locked_by_user_id"], ["id"], ondelete="SET NULL")
 
     users_table = sa.table(
         "users",
@@ -99,13 +99,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(op.f("fk_shift_segments_locked_by_user_id_users"), "shift_segments", type_="foreignkey")
+    op.drop_constraint("fk_shift_segments_locked_by_user_id_users", "shift_segments", type_="foreignkey")
     op.drop_column("shift_segments", "locked_by_user_id")
-    op.drop_constraint(op.f("fk_work_shifts_locked_by_user_id_users"), "work_shifts", type_="foreignkey")
+    op.drop_constraint("fk_work_shifts_locked_by_user_id_users", "work_shifts", type_="foreignkey")
     op.drop_column("work_shifts", "locked_by_user_id")
-    op.drop_constraint(op.f("fk_schedule_versions_published_by_user_id_users"), "schedule_versions", type_="foreignkey")
+    op.drop_constraint("fk_schedule_versions_published_by_user_id_users", "schedule_versions", type_="foreignkey")
     op.drop_column("schedule_versions", "published_by_user_id")
-    op.drop_constraint(op.f("fk_schedule_change_logs_executed_by_user_id_users"), "schedule_change_logs", type_="foreignkey")
+    op.drop_constraint("fk_schedule_change_logs_executed_by_user_id_users", "schedule_change_logs", type_="foreignkey")
     op.drop_column("schedule_change_logs", "executed_by_user_id")
     op.drop_index(op.f("ix_user_sessions_user_id"), table_name="user_sessions")
     op.drop_table("user_sessions")
