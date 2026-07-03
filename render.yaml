@@ -1,11 +1,13 @@
 databases:
   - name: crewpilot-db
+    plan: free
     databaseName: crewpilot
     user: crewpilot
 
 services:
   - type: web
     name: crewpilot-api
+    plan: free
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
@@ -30,6 +32,7 @@ services:
 
   - type: web
     name: crewpilot-web
+    plan: free
     runtime: docker
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .

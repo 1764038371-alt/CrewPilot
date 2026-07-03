@@ -75,6 +75,7 @@ To share CrewPilot by URL, deploy three pieces:
 - Next.js Web
 
 This repo includes `render.yaml` plus Dockerfiles for Render Blueprint deployment.
+The Blueprint explicitly uses Render free plans for the API and web services.
 
 1. Push this repository to GitHub.
 2. In Render, create a new Blueprint from the repository.
@@ -110,3 +111,7 @@ users available when the database is empty. The initial users are:
 - `viewer@example.com`
 
 Only people who know `CREWPILOT_LOGIN_PASSWORD` can log in with those accounts.
+
+If Render does not offer a free PostgreSQL plan in your account or region, use the
+lowest-cost Render database plan, or create a free PostgreSQL database on another
+provider and set `DATABASE_URL` manually on `crewpilot-api`.
