@@ -585,6 +585,77 @@ def test_request_based_generation_uses_requested_work_times() -> None:
     assert create_change.command_payload["end_time"] == "21:30:00"
 
 
+def test_request_based_generation_skips_full_day_off_request() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+
+    changes = solver._build_request_schedule_generation_changes(
+        scope=DateScope(type=OptimizationScopeType.DATE, date=date(2026, 7, 1)),
+        shifts=[],
+        requests=[
+            shift_request(
+                STAFF_ID,
+                start_time=None,
+                end_time=None,
+                request_type="off",
+            ),
+            shift_request(STAFF_SECOND_ID, start_time=time(9), end_time=time(17)),
+        ],
+        staff_members=[staff_member(STAFF_ID), staff_member(STAFF_SECOND_ID)],
+        positions=[position(POSITION_B_ID, "B"), position(POSITION_C_ID, "C")],
+        skills=[skill(SKILL_B_ID, POSITION_B_ID), skill(SKILL_C_ID, POSITION_C_ID)],
+        staff_skills=[
+            staff_skill(SKILL_B_ID, STAFF_ID),
+            staff_skill(SKILL_C_ID, STAFF_ID),
+            staff_skill(SKILL_B_ID, STAFF_SECOND_ID),
+            staff_skill(SKILL_C_ID, STAFF_SECOND_ID),
+        ],
+        task_types=[],
+    )
+
+    created_staff_ids = {
+        change.command_payload["staff_member_id"]
+        for change in changes
+        if change.command_type == "CreateWorkShift"
+    }
+    assert str(STAFF_ID) not in created_staff_ids
+    assert str(STAFF_SECOND_ID) in created_staff_ids
+
+
+def test_request_based_generation_deletes_locked_shift_for_full_day_off_request() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    locked_shift = work_shift(start_time=time(10), end_time=time(13))
+    locked_shift.is_locked = True
+
+    changes = solver._build_request_schedule_generation_changes(
+        scope=DateScope(type=OptimizationScopeType.DATE, date=date(2026, 7, 1)),
+        shifts=[locked_shift],
+        requests=[
+            shift_request(
+                STAFF_ID,
+                start_time=None,
+                end_time=None,
+                request_type="off",
+            ),
+            shift_request(STAFF_SECOND_ID, start_time=time(9), end_time=time(17)),
+        ],
+        staff_members=[staff_member(STAFF_ID), staff_member(STAFF_SECOND_ID)],
+        positions=[position(POSITION_B_ID, "B"), position(POSITION_C_ID, "C")],
+        skills=[skill(SKILL_B_ID, POSITION_B_ID), skill(SKILL_C_ID, POSITION_C_ID)],
+        staff_skills=[
+            staff_skill(SKILL_B_ID, STAFF_ID),
+            staff_skill(SKILL_C_ID, STAFF_ID),
+            staff_skill(SKILL_B_ID, STAFF_SECOND_ID),
+            staff_skill(SKILL_C_ID, STAFF_SECOND_ID),
+        ],
+        task_types=[],
+    )
+
+    assert any(
+        change.command_type == "DeleteWorkShift" and change.target_id == SHIFT_ID
+        for change in changes
+    )
+
+
 def test_request_based_generation_covers_b_and_c_with_two_staff() -> None:
     solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
 
@@ -969,6 +1040,10 @@ def test_request_based_generation_staggers_breaks_and_keeps_b_c_covered() -> Non
     break_windows = break_windows_from_changes(changes)
     assert len(break_windows) == 8
     assert max_simultaneous_windows(break_windows) <= 1
+    assert all(
+        time(11) <= start and end <= time(15)
+        for start, end in break_windows
+    )
     for start_hour in range(11, 15):
         assert {"B", "C"}.issubset(
             active_position_codes_at(changes, time(start_hour, 30))
@@ -1008,8 +1083,35 @@ def test_request_based_generation_uses_break_rules_by_shift_length() -> None:
 
     assert break_windows_by_staff.get(str(short_staff_id), []) == []
     assert break_durations(break_windows_by_staff[str(middle_staff_id)]) == [15]
+    assert all(
+        time(11) <= start and end <= time(12)
+        for start, end in break_windows_by_staff[str(middle_staff_id)]
+    )
     assert break_durations(break_windows_by_staff[str(long_staff_id)]) == [30, 30]
+    assert all(
+        time(11) <= start and end <= time(15)
+        for start, end in break_windows_by_staff[str(long_staff_id)]
+    )
     assert staff_breaks_are_spaced(break_windows_by_staff[str(long_staff_id)])
+
+
+def test_request_based_generation_skips_break_when_only_edge_slots_exist() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+
+    changes = solver._build_request_schedule_generation_changes(
+        scope=DateScope(type=OptimizationScopeType.DATE, date=date(2026, 7, 1)),
+        shifts=[],
+        requests=[
+            shift_request(STAFF_ID, start_time=time(9), end_time=time(13)),
+        ],
+        staff_members=[staff_member(STAFF_ID)],
+        positions=[position(POSITION_C_ID, "C")],
+        skills=[skill(SKILL_C_ID, POSITION_C_ID)],
+        staff_skills=[staff_skill(SKILL_C_ID, STAFF_ID)],
+        task_types=[],
+    )
+
+    assert break_windows_from_changes(changes) == []
 
 
 def test_request_based_generation_rebuilds_exact_mix_after_breaks() -> None:
@@ -1732,13 +1834,19 @@ def staff_member(staff_member_id: UUID) -> SimpleNamespace:
     )
 
 
-def shift_request(staff_member_id: UUID, *, start_time: time, end_time: time) -> SimpleNamespace:
+def shift_request(
+    staff_member_id: UUID,
+    *,
+    start_time: Optional[time],
+    end_time: Optional[time],
+    request_type: str = "available",
+) -> SimpleNamespace:
     return SimpleNamespace(
         staff_member_id=staff_member_id,
         request_date=date(2026, 7, 1),
         start_time=start_time,
         end_time=end_time,
-        request_type="available",
+        request_type=request_type,
     )
 
 

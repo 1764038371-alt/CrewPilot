@@ -11,6 +11,8 @@ from app.modules.planning.models import ShiftRequest, ShiftRequirement
 from app.modules.schedule.models import ScheduleVersion, ScheduleWarning, ShiftSegment, WorkShift
 from app.modules.stores.models import Position, SkillDefinition, StaffSkill, Store
 
+BREAK_SHIFT_EDGE_BUFFER_MINUTES = 120
+
 
 class WarningService:
     def __init__(self, session: AsyncSession) -> None:
@@ -443,6 +445,27 @@ class WarningService:
                 for segment in shift_segments
                 if segment.segment_type == "BREAK"
             )
+            for segment in shift_segments:
+                if segment.segment_type != "BREAK":
+                    continue
+                if not break_inside_shift_edge_buffer(shift, segment):
+                    warnings.append(
+                        ScheduleWarning(
+                            schedule_version_id=schedule_version_id,
+                            work_shift_id=shift.id,
+                            shift_segment_id=segment.id,
+                            warning_type="BREAK_VIOLATION",
+                            severity="warning",
+                            message="休憩が勤務開始または退勤の2時間以内に入っています。",
+                            details={
+                                "break_start": segment.start_time.isoformat(),
+                                "break_end": segment.end_time.isoformat(),
+                                "shift_start": shift.start_time.isoformat(),
+                                "shift_end": shift.end_time.isoformat(),
+                                "edge_buffer_minutes": BREAK_SHIFT_EDGE_BUFFER_MINUTES,
+                            },
+                        )
+                    )
             if break_minutes < required_break_minutes:
                 target_segment = shift_segments[0] if shift_segments else None
                 warnings.append(
@@ -765,6 +788,15 @@ def minutes_between(start_time: time, end_time: time) -> int:
 
 def time_to_minutes(value: time) -> int:
     return value.hour * 60 + value.minute
+
+
+def break_inside_shift_edge_buffer(shift: WorkShift, segment: ShiftSegment) -> bool:
+    return (
+        time_to_minutes(segment.start_time)
+        >= time_to_minutes(shift.start_time) + BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        and time_to_minutes(segment.end_time)
+        <= time_to_minutes(shift.end_time) - BREAK_SHIFT_EDGE_BUFFER_MINUTES
+    )
 
 
 def overlaps(start_a: time, end_a: time, start_b: time, end_b: time) -> bool:

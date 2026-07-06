@@ -30,6 +30,9 @@ MIN_POSITION_BLOCK_MINUTES = 60
 IDEAL_POSITION_BLOCK_MINUTES = 120
 SOFT_MAX_POSITION_BLOCK_MINUTES = 150
 HARD_MAX_POSITION_BLOCK_MINUTES = 150
+BREAK_SHIFT_EDGE_BUFFER_MINUTES = 120
+AVAILABLE_REQUEST_TYPES = {"available", "preferred", "ok"}
+BLOCKING_REQUEST_TYPES = {"unavailable", "off", "ng"}
 
 
 @dataclass(frozen=True)
@@ -491,15 +494,35 @@ class ORToolsSolver(ScheduleSolver):
         if target_date is None:
             return []
 
-        request_rows = [
-            request
-            for request in requests
-            if request.request_date == target_date
-            and request.request_type in {"available", "preferred", "ok"}
-            and request.start_time is not None
-            and request.end_time is not None
-            and request.start_time < request.end_time
-        ]
+        blocking_requests_by_staff: dict[UUID, list[ShiftRequest]] = {}
+        for request in requests:
+            if request.request_date == target_date and is_blocking_request(request):
+                blocking_requests_by_staff.setdefault(request.staff_member_id, []).append(request)
+
+        request_rows = []
+        for request in requests:
+            if (
+                request.request_date != target_date
+                or not is_available_request(request)
+                or request.start_time is None
+                or request.end_time is None
+                or request.start_time >= request.end_time
+            ):
+                continue
+            if any(
+                request_blocks_window(
+                    blocking_request,
+                    target_date,
+                    request.start_time,
+                    request.end_time,
+                )
+                for blocking_request in blocking_requests_by_staff.get(
+                    request.staff_member_id,
+                    [],
+                )
+            ):
+                continue
+            request_rows.append(request)
         if not request_rows:
             return []
 
@@ -530,9 +553,20 @@ class ORToolsSolver(ScheduleSolver):
             return []
 
         changes: list[SolverChange] = []
+        blocked_staff_ids = set(blocking_requests_by_staff)
         for shift in shifts:
-            if shift.work_date != target_date or shift.is_locked:
+            if shift.work_date != target_date:
                 continue
+            if shift.is_locked and shift.staff_member_id not in blocked_staff_ids:
+                continue
+            explanation_summary = (
+                "休み希望が出ているため、ロック済みでもAI原案から外します。"
+                if shift.staff_member_id in blocked_staff_ids
+                else (
+                    "希望シフトから原案を作り直すため、"
+                    "既存の未ロック勤務を置き換えます。"
+                )
+            )
             changes.append(
                 SolverChange(
                     change_type="delete_work_shift",
@@ -543,13 +577,16 @@ class ORToolsSolver(ScheduleSolver):
                     before_value=work_shift_snapshot(shift),
                     after_value=None,
                     explanation={
-                        "summary": (
-                            "希望シフトから原案を作り直すため、"
-                            "既存の未ロック勤務を置き換えます。"
-                        ),
+                        "summary": explanation_summary,
                         "resolved_warnings": ["STAFF_SHORTAGE", "REQUEST_VIOLATION"],
-                        "active_constraints": ["ロック済み勤務は保持", "希望時間を優先"],
-                        "reasons": ["既存ブロックの崩れを引き継がない"],
+                        "active_constraints": [
+                            "休み希望は勤務化しない",
+                            "希望時間を優先",
+                        ],
+                        "reasons": [
+                            "休み希望の従業員を勤務に入れない",
+                            "既存ブロックの崩れを引き継がない",
+                        ],
                     },
                 )
             )
@@ -1117,21 +1154,28 @@ class ORToolsSolver(ScheduleSolver):
         skills: list[SkillDefinition],
         staff_skills: list[StaffSkill],
     ) -> tuple[time, time] | None:
+        shift_allowed_start = time_to_minutes(request.start_time) + BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        shift_allowed_end = time_to_minutes(request.end_time) - BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        if shift_allowed_end - shift_allowed_start < break_minutes:
+            return None
         work_segments = [
             segment
             for segment in planned[request.staff_member_id]
             if segment["segment_type"] == "WORK"
-            and minutes_between(segment["start_time"], segment["end_time"]) >= break_minutes + 60
+            and minutes_between(segment["start_time"], segment["end_time"]) >= break_minutes
         ]
         if not work_segments:
             return None
         candidates: list[tuple[int, time, time]] = []
         for segment in work_segments:
-            start_minute = time_to_minutes(segment["start_time"])
-            latest_start = time_to_minutes(segment["end_time"]) - break_minutes
+            start_minute = max(time_to_minutes(segment["start_time"]), shift_allowed_start)
+            segment_end = min(time_to_minutes(segment["end_time"]), shift_allowed_end)
+            latest_start = segment_end - break_minutes
+            if latest_start < start_minute:
+                continue
             cursor = round((start_minute + (latest_start - start_minute) // 2) / 15) * 15
             preferred_start = round((preferred_center - break_minutes // 2) / 15) * 15
-            candidate_starts = [
+            focused_starts = [
                 preferred_start,
                 preferred_start - 30,
                 preferred_start + 30,
@@ -1141,11 +1185,13 @@ class ORToolsSolver(ScheduleSolver):
                 start_minute,
                 latest_start,
             ]
+            candidate_starts = set(focused_starts)
+            candidate_starts.update(range(start_minute, latest_start + 1, 15))
             for candidate_start in candidate_starts:
                 candidate_start = max(start_minute, min(latest_start, candidate_start))
                 candidate_start = round(candidate_start / 15) * 15
+                candidate_start = max(start_minute, min(latest_start, candidate_start))
                 candidate_end = candidate_start + break_minutes
-                segment_end = time_to_minutes(segment["end_time"])
                 if candidate_start < start_minute or candidate_end > segment_end:
                     continue
                 break_start = add_minutes(time(0, 0), candidate_start)
@@ -2705,7 +2751,7 @@ class ORToolsSolver(ScheduleSolver):
                     for segment in shift_segments
                     if segment.segment_type == "WORK"
                     and not segment.is_locked
-                    and minutes_between(segment.start_time, segment.end_time) >= 60
+                    and minutes_between(segment.start_time, segment.end_time) >= 15
                 ),
                 key=lambda item: minutes_between(item.start_time, item.end_time),
                 default=None,
@@ -2731,11 +2777,15 @@ class ORToolsSolver(ScheduleSolver):
             )
             offset = 60
             for break_minutes in break_durations:
-                break_start = add_minutes(work_segment.start_time, offset)
-                break_end = add_minutes(break_start, break_minutes)
-                if break_end > work_segment.end_time:
-                    break_end = work_segment.end_time
-                    break_start = add_minutes(break_end, -break_minutes)
+                break_window = self._break_window_inside_shift_edge_buffer(
+                    shift,
+                    shift_segments,
+                    break_minutes,
+                    offset,
+                )
+                if break_window is None:
+                    continue
+                break_start, break_end = break_window
                 after_value = {
                     "work_shift_id": str(shift.id),
                     "start_time": break_start.isoformat(),
@@ -2760,6 +2810,43 @@ class ORToolsSolver(ScheduleSolver):
                 )
                 offset += break_minutes + 60
         return changes
+
+    def _break_window_inside_shift_edge_buffer(
+        self,
+        shift: WorkShift,
+        shift_segments: list[ShiftSegment],
+        break_minutes: int,
+        offset_minutes: int,
+    ) -> tuple[time, time] | None:
+        shift_allowed_start = time_to_minutes(shift.start_time) + BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        shift_allowed_end = time_to_minutes(shift.end_time) - BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        if shift_allowed_end - shift_allowed_start < break_minutes:
+            return None
+        work_segments = sorted(
+            (
+                segment
+                for segment in shift_segments
+                if segment.segment_type == "WORK"
+                and not segment.is_locked
+                and minutes_between(segment.start_time, segment.end_time) >= break_minutes
+            ),
+            key=lambda item: minutes_between(item.start_time, item.end_time),
+            reverse=True,
+        )
+        for segment in work_segments:
+            allowed_start = max(time_to_minutes(segment.start_time), shift_allowed_start)
+            allowed_end = min(time_to_minutes(segment.end_time), shift_allowed_end)
+            latest_start = allowed_end - break_minutes
+            if latest_start < allowed_start:
+                continue
+            candidate_start = min(latest_start, allowed_start + offset_minutes)
+            candidate_start = round(candidate_start / 15) * 15
+            candidate_start = max(allowed_start, min(latest_start, candidate_start))
+            return (
+                add_minutes(time(0, 0), candidate_start),
+                add_minutes(time(0, 0), candidate_start + break_minutes),
+            )
+        return None
 
     def _empty_proposal(
         self,
@@ -2872,11 +2959,12 @@ class ORToolsSolver(ScheduleSolver):
                     continue
                 if request.request_date != shift.work_date:
                     continue
-                if request.request_type not in {"unavailable", "off", "ng"}:
-                    continue
-                request_start = request.start_time or shift.start_time
-                request_end = request.end_time or shift.end_time
-                if overlaps(shift.start_time, shift.end_time, request_start, request_end):
+                if request_blocks_window(
+                    request,
+                    shift.work_date,
+                    shift.start_time,
+                    shift.end_time,
+                ):
                     counts["REQUEST_VIOLATION"] += 1
         return counts
 
@@ -2950,17 +3038,19 @@ class ORToolsSolver(ScheduleSolver):
                 continue
             if request.request_date != segment.segment_date:
                 continue
-            request_start = request.start_time or shift.start_time
-            request_end = request.end_time or shift.end_time
-            if request.request_type in {"unavailable", "off", "ng"} and overlaps(
+            if request_blocks_window(
+                request,
+                segment.segment_date,
                 segment.start_time,
                 segment.end_time,
-                request_start,
-                request_end,
             ):
                 return True
-            if request.request_type in {"available", "preferred", "ok"}:
-                positive_requests.append((request_start, request_end))
+            if (
+                is_available_request(request)
+                and request.start_time is not None
+                and request.end_time is not None
+            ):
+                positive_requests.append((request.start_time, request.end_time))
         if not positive_requests:
             return False
         return not any(
@@ -3628,17 +3718,14 @@ class ORToolsSolver(ScheduleSolver):
         for request in requests:
             if request.staff_member_id != staff_member_id or request.request_date != work_date:
                 continue
-            request_start = request.start_time or start_time
-            request_end = request.end_time or end_time
-            if request.request_type in {"unavailable", "off", "ng"} and overlaps(
-                start_time,
-                end_time,
-                request_start,
-                request_end,
-            ):
+            if request_blocks_window(request, work_date, start_time, end_time):
                 return False
-            if request.request_type in {"available", "preferred", "ok"}:
-                positive_requests.append((request_start, request_end))
+            if (
+                is_available_request(request)
+                and request.start_time is not None
+                and request.end_time is not None
+            ):
+                positive_requests.append((request.start_time, request.end_time))
         if not positive_requests:
             return True
         return any(
@@ -4382,3 +4469,24 @@ def proposal_summary_metrics(
         "fairness_delta": fairness_before - fairness_after,
         "target_staff_count": len(target_staff_ids),
     }
+
+
+def is_available_request(request: ShiftRequest) -> bool:
+    return request.request_type in AVAILABLE_REQUEST_TYPES
+
+
+def is_blocking_request(request: ShiftRequest) -> bool:
+    return request.request_type in BLOCKING_REQUEST_TYPES
+
+
+def request_blocks_window(
+    request: ShiftRequest,
+    work_date: date,
+    start_time: time,
+    end_time: time,
+) -> bool:
+    if request.request_date != work_date or not is_blocking_request(request):
+        return False
+    if request.start_time is None or request.end_time is None:
+        return True
+    return overlaps(start_time, end_time, request.start_time, request.end_time)

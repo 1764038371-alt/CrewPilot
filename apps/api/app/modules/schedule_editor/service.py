@@ -47,6 +47,8 @@ from app.modules.schedule_editor.warnings import WarningService
 from app.modules.staff.models import StaffMember
 from app.modules.stores.models import Position, Store, TaskType
 
+BREAK_SHIFT_EDGE_BUFFER_MINUTES = 120
+
 
 class ScheduleCommandService:
     def __init__(self, session: AsyncSession) -> None:
@@ -801,6 +803,7 @@ class ScheduleCommandService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Break is outside work shift",
             )
+        self._validate_break_shift_edge_buffer(work_shift, start_time, end_time)
 
         target = await self._find_segment_covering_break(work_shift.id, start_time, end_time)
         if target is None or target.segment_type != "WORK" or target.is_locked:
@@ -887,10 +890,37 @@ class ScheduleCommandService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Break is outside work shift",
             )
+        self._validate_break_shift_edge_buffer(
+            work_shift,
+            command.payload.start_time,
+            command.payload.end_time,
+        )
         segment.start_time = command.payload.start_time
         segment.end_time = command.payload.end_time
         segment.assignment_source = "optimized"
         return segment
+
+    def _validate_break_shift_edge_buffer(
+        self,
+        work_shift: WorkShift,
+        start_time: time,
+        end_time: time,
+    ) -> None:
+        allowed_start = (
+            minutes_since_midnight(work_shift.start_time)
+            + BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        )
+        allowed_end = minutes_since_midnight(work_shift.end_time) - BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        start_minute = minutes_since_midnight(start_time)
+        end_minute = minutes_since_midnight(end_time)
+        if start_minute < allowed_start or end_minute > allowed_end:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Break must be at least 2 hours after shift start "
+                    "and 2 hours before shift end"
+                ),
+            )
 
     async def _resize_break(
         self,
@@ -1202,6 +1232,10 @@ class ScheduleCommandService:
 
 def minutes_between(start_time: time, end_time: time) -> int:
     return end_time.hour * 60 + end_time.minute - start_time.hour * 60 - start_time.minute
+
+
+def minutes_since_midnight(value: time) -> int:
+    return value.hour * 60 + value.minute
 
 
 def add_minutes(value: time, minutes: int) -> time:
