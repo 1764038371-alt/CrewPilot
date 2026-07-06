@@ -237,6 +237,25 @@ def test_position_mix_warning_detects_missing_f_for_three_active_staff() -> None
     assert warnings[0].details["extra_position_codes"] == ["S"]
 
 
+def test_break_duration_rules_are_consistent_between_solver_and_warnings() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    warning_service = WarningService(session=None)  # type: ignore[arg-type]
+
+    expected_minutes = {
+        239: 0,
+        240: 15,
+        359: 15,
+        360: 45,
+        479: 45,
+        480: 60,
+        540: 60,
+    }
+
+    for shift_minutes, required_break_minutes in expected_minutes.items():
+        assert solver._required_break_minutes(shift_minutes) == required_break_minutes
+        assert warning_service._required_break_minutes(shift_minutes) == required_break_minutes
+
+
 def test_position_skill_does_not_accept_opening_skill_for_normal_work() -> None:
     solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
 
