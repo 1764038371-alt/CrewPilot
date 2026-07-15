@@ -18,16 +18,32 @@ export function formatApiErrorDetail(error: unknown): string | null {
     return error instanceof Error ? error.message : null;
   }
 
+  if ([502, 503, 504].includes(error.status)) {
+    return "サーバーを更新中です。少し待ってから、もう一度お試しください。";
+  }
+
+  if (error.status >= 500) {
+    return "サーバーで一時的な問題が発生しました。少し待ってから、もう一度お試しください。";
+  }
+
   if (typeof error.body === "object" && error.body && "detail" in error.body) {
     const detail = error.body.detail;
     return typeof detail === "string" ? detail : JSON.stringify(detail);
   }
 
   if (typeof error.body === "string") {
-    return error.body;
+    if (looksLikeHtml(error.body)) {
+      return `通信に失敗しました（${error.status}）。少し待ってから、もう一度お試しください。`;
+    }
+    return error.body.length > 300 ? `${error.body.slice(0, 300)}…` : error.body;
   }
 
   return null;
+}
+
+function looksLikeHtml(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith("<!doctype html") || normalized.startsWith("<html");
 }
 
 const apiBaseUrl = getApiBaseUrl();

@@ -284,7 +284,9 @@ function shiftCreateErrorMessage(error: unknown) {
   }
 
   const detail = formatApiErrorDetail(error);
-  return detail ? `保存またはAI提案に失敗しました: ${detail}` : "保存またはAI提案に失敗しました。入力内容を確認してください。";
+  return detail
+    ? `保存またはAI提案に失敗しました: ${detail}`
+    : "保存またはAI提案に失敗しました。少し待ってから、もう一度お試しください。";
 }
 
 function RequestSummaryItem({ label, value }: { label: string; value: string }) {
