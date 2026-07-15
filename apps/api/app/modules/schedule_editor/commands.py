@@ -415,3 +415,4 @@ class ScheduleCommandResult(BaseModel):
     revision: int
     command_type: ScheduleCommandType
     warnings_count: int
+    shift_segment_id: Optional[UUID] = None

@@ -348,6 +348,7 @@ class ScheduleCommandService:
             revision=schedule_version.revision,
             command_type=command.type,
             warnings_count=warnings_count,
+            shift_segment_id=segment_id,
         )
 
     async def undo_latest(

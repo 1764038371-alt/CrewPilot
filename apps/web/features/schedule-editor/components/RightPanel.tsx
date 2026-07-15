@@ -358,7 +358,85 @@ function filterWarningsByDate(workspace?: WorkspaceData, selectedDate?: string) 
   if (!workspace || !selectedDate) {
     return warnings;
   }
-  return warnings.filter((warning) => warningMatchesSelectedDate(warning, workspace, selectedDate));
+  return warnings.filter(
+    (warning) =>
+      warningMatchesSelectedDate(warning, workspace, selectedDate)
+      && warningStillAppliesToDraft(warning, workspace)
+  );
+}
+
+function warningStillAppliesToDraft(warning: ScheduleWarning, workspace: WorkspaceData) {
+  if (warning.warning_type === "BREAK_VIOLATION" && warning.work_shift_id) {
+    const required = warning.details?.required_break_minutes;
+    if (typeof required === "number") {
+      const actual = workspace.shift_segments
+        .filter(
+          (segment) =>
+            segment.work_shift_id === warning.work_shift_id && segment.segment_type === "BREAK"
+        )
+        .reduce(
+          (total, segment) =>
+            total + timeToMinutes(segment.end_time) - timeToMinutes(segment.start_time),
+          0
+        );
+      return actual < required;
+    }
+  }
+  if (warning.warning_type === "BC_COVERAGE") {
+    const date = typeof warning.details?.date === "string" ? warning.details.date : null;
+    const start = typeof warning.details?.start_time === "string" ? warning.details.start_time : null;
+    const end = typeof warning.details?.end_time === "string" ? warning.details.end_time : null;
+    if (date && start && end) {
+      const activePositionCodes = workspace.shift_segments
+        .filter(
+          (segment) =>
+            segment.segment_date === date
+            && segment.segment_type === "WORK"
+            && timeToMinutes(segment.start_time) < timeToMinutes(end)
+            && timeToMinutes(start) < timeToMinutes(segment.end_time)
+        )
+        .map(
+          (segment) => workspace.positions.find((position) => position.id === segment.position_id)?.code
+        );
+      const requiredCodes =
+        activePositionCodes.length < 2
+          ? []
+          : activePositionCodes.length === 2
+            ? ["B", "C"]
+            : activePositionCodes.length === 3
+              ? ["B", "C", "F"]
+              : activePositionCodes.length === 4
+                ? ["B", "C", "F", "S"]
+                : ["B", "B", "C", "F", "S"];
+      const remainingCodes = [...activePositionCodes];
+      return requiredCodes.some((code) => {
+        const index = remainingCodes.indexOf(code);
+        if (index < 0) {
+          return true;
+        }
+        remainingCodes.splice(index, 1);
+        return false;
+      });
+    }
+  }
+  if (warning.warning_type === "DEPOSIT_COVERAGE") {
+    const date = typeof warning.details?.date === "string" ? warning.details.date : null;
+    const depositTask = workspace.task_types.find((task) => task.code === "M");
+    if (date && depositTask) {
+      const assigned = workspace.shift_segments.some(
+        (segment) =>
+          segment.segment_date === date
+          && segment.segment_type === "TASK"
+          && segment.task_type_id === depositTask.id
+          && segment.start_time.slice(0, 5) === "10:00"
+          && segment.end_time.slice(0, 5) === "10:30"
+      );
+      if (assigned) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 function autoMergeTargetSegmentId(command: ScheduleCommand) {

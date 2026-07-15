@@ -165,6 +165,7 @@ export type ScheduleCommandResult = {
   revision: number;
   command_type: string;
   warnings_count: number;
+  shift_segment_id?: Uuid | null;
 };
 
 export function executeScheduleCommand(

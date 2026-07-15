@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { getCurrentUser, logout } from "@/features/auth/api/authApi";
-import { executeScheduleCommand } from "../api/scheduleCommandApi";
+import { executeScheduleCommand, type ScheduleCommand } from "../api/scheduleCommandApi";
 import {
   approveScheduleVersion,
   archiveScheduleVersion,
@@ -74,12 +74,20 @@ export function WorkspaceLayout({ planningPeriodId, initialWorkspace }: Workspac
         return;
       }
       const batchId = crypto.randomUUID();
+      const draftSegmentIds = new Map<string, string>();
       setSaveStatus("saving");
       for (const command of commands) {
-        await executeScheduleCommand(scheduleVersionId, command, {
+        const resolvedCommand = resolveDraftSegmentIds(command, draftSegmentIds);
+        const result = await executeScheduleCommand(scheduleVersionId, resolvedCommand, {
           batchId,
           batchLabel: `Draft Save (${commands.length} commands)`
         });
+        if (command.type === "SplitSegment" && result.shift_segment_id) {
+          draftSegmentIds.set(
+            `draft-split-${command.payload.segment_id}-${command.payload.split_time}`,
+            result.shift_segment_id
+          );
+        }
       }
     },
     onSuccess: () => {
@@ -89,7 +97,7 @@ export function WorkspaceLayout({ planningPeriodId, initialWorkspace }: Workspac
       void queryClient.invalidateQueries({ queryKey: ["optimization-proposals"] });
     },
     onError: (error) => {
-      setSaveStatus("failed", error instanceof Error ? error.message : "保存に失敗しました。");
+      setSaveStatus("failed", formatSaveError(error));
     }
   });
   const runSave = () => {
@@ -349,6 +357,55 @@ function apiErrorIssues(error: unknown): PublishValidationIssue[] {
       severity: "error"
     }
   ];
+}
+
+function resolveDraftSegmentIds(
+  command: ScheduleCommand,
+  draftSegmentIds: Map<string, string>
+): ScheduleCommand {
+  const resolve = (id: string) => draftSegmentIds.get(id) ?? id;
+  if (command.type === "MergeSegment") {
+    return {
+      ...command,
+      payload: {
+        ...command.payload,
+        first_segment_id: resolve(command.payload.first_segment_id),
+        second_segment_id: resolve(command.payload.second_segment_id)
+      }
+    };
+  }
+  if (
+    command.type === "DeleteShiftSegment" ||
+    command.type === "ResizeSegment" ||
+    command.type === "UpdateSegmentPosition" ||
+    command.type === "UpdateSegmentTask" ||
+    command.type === "UpdateSegmentBreak" ||
+    command.type === "LockSegment" ||
+    command.type === "UnlockSegment"
+  ) {
+    return {
+      ...command,
+      payload: {
+        ...command.payload,
+        segment_id: resolve(command.payload.segment_id)
+      }
+    } as ScheduleCommand;
+  }
+  return command;
+}
+
+function formatSaveError(error: unknown) {
+  if (error instanceof ApiError) {
+    const detail =
+      typeof error.body === "object" && error.body && "detail" in error.body
+        ? (error.body as { detail?: unknown }).detail
+        : null;
+    if (typeof detail === "string" && detail.length <= 160) {
+      return `保存に失敗しました: ${detail}`;
+    }
+    return `保存に失敗しました（HTTP ${error.status}）。編集内容はこの画面に残っています。`;
+  }
+  return "保存に失敗しました。編集内容はこの画面に残っています。";
 }
 
 function useUnsavedChangesGuard() {
