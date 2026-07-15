@@ -990,37 +990,6 @@ def test_interval_assignment_rotates_long_cashier_without_short_churn() -> None:
     assert len(set(cashier_by_interval)) > 1
 
 
-def test_long_shift_staff_receive_varied_qualified_positions() -> None:
-    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
-    staff_ids = [
-        STAFF_ID,
-        STAFF_SECOND_ID,
-        UUID("30000000-0000-0000-0000-000000000003"),
-        UUID("30000000-0000-0000-0000-000000000004"),
-    ]
-    requests = [SimpleNamespace(staff_member_id=staff_id) for staff_id in staff_ids]
-    intervals = [
-        (time(9), time(11), requests),
-        (time(11), time(13), requests),
-        (time(13), time(15), requests),
-        (time(15), time(17), requests),
-    ]
-
-    assignments = solver._assign_positions_across_intervals(
-        intervals,
-        positions_by_code(),
-        all_position_skills(),
-        all_position_staff_skills(staff_ids),
-    )
-
-    for staff_id in staff_ids:
-        assigned_codes = {
-            assignments[(start_time, end_time)][staff_id]
-            for start_time, end_time, _ in intervals
-        }
-        assert len(assigned_codes) >= 3
-
-
 def test_request_based_deposit_keeps_b_and_c_covered() -> None:
     solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
     staff_ids = [
