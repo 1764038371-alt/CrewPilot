@@ -200,7 +200,7 @@ export function WorkspaceLayout({ planningPeriodId, initialWorkspace }: Workspac
     router.replace(`/planning-periods/${planningPeriodId}/workspace?${params.toString()}`, { scroll: false });
   }, [planningPeriodId, router, searchParams, selectedDate, workspace]);
 
-  useUnsavedChangesGuard(unsavedCount > 0);
+  useUnsavedChangesGuard();
 
   return (
     <main className="flex h-screen min-h-[720px] flex-col overflow-hidden bg-neutral-100 text-neutral-950">
@@ -351,16 +351,20 @@ function apiErrorIssues(error: unknown): PublishValidationIssue[] {
   ];
 }
 
-function useUnsavedChangesGuard(hasUnsavedChanges: boolean) {
+function useUnsavedChangesGuard() {
   useEffect(() => {
-    if (!hasUnsavedChanges) {
-      return;
-    }
+    const hasUnsavedChanges = () => getUnsavedDraftCount(useEditingStore.getState()) > 0;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges()) {
+        return;
+      }
       event.preventDefault();
       event.returnValue = "";
     };
     const handleDocumentClick = (event: MouseEvent) => {
+      if (!hasUnsavedChanges()) {
+        return;
+      }
       const target = event.target;
       if (!(target instanceof HTMLElement)) {
         return;
@@ -386,5 +390,5 @@ function useUnsavedChangesGuard(hasUnsavedChanges: boolean) {
       window.onbeforeunload = null;
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [hasUnsavedChanges]);
+  }, []);
 }
