@@ -1136,11 +1136,11 @@ class ORToolsSolver(ScheduleSolver):
                 )
 
     def _break_plan_for_shift(self, shift_minutes: int) -> list[tuple[int, float]]:
-        if shift_minutes < 240:
+        if shift_minutes <= 240:
             return []
-        if shift_minutes < 360:
+        if shift_minutes <= 360:
             return [(15, 0.5)]
-        if shift_minutes < 480:
+        if shift_minutes <= 480:
             return [(15, 0.35), (30, 0.65)]
         return [(30, 0.35), (30, 0.65)]
 
@@ -2770,11 +2770,12 @@ class ORToolsSolver(ScheduleSolver):
             )
             if missing_break_minutes == 0:
                 continue
-            break_durations = (
-                [15, 30]
-                if missing_break_minutes >= 45
-                else [15 if missing_break_minutes <= 15 else 30]
-            )
+            if missing_break_minutes >= 60:
+                break_durations = [30, 30]
+            elif missing_break_minutes >= 45:
+                break_durations = [15, 30]
+            else:
+                break_durations = [15 if missing_break_minutes <= 15 else 30]
             offset = 60
             for break_minutes in break_durations:
                 break_window = self._break_window_inside_shift_edge_buffer(
@@ -2969,11 +2970,11 @@ class ORToolsSolver(ScheduleSolver):
         return counts
 
     def _required_break_minutes(self, shift_minutes: int) -> int:
-        if shift_minutes < 240:
+        if shift_minutes <= 240:
             return 0
-        if shift_minutes < 360:
+        if shift_minutes <= 360:
             return 15
-        if shift_minutes < 480:
+        if shift_minutes <= 480:
             return 45
         return 60
 

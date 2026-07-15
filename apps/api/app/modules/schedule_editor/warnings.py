@@ -604,11 +604,11 @@ class WarningService:
         return warnings
 
     def _required_break_minutes(self, shift_minutes: int) -> int:
-        if shift_minutes < 240:
+        if shift_minutes <= 240:
             return 0
-        if shift_minutes < 360:
+        if shift_minutes <= 360:
             return 15
-        if shift_minutes < 480:
+        if shift_minutes <= 480:
             return 45
         return 60
 

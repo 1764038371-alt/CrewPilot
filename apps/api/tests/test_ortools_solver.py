@@ -243,11 +243,12 @@ def test_break_duration_rules_are_consistent_between_solver_and_warnings() -> No
 
     expected_minutes = {
         239: 0,
-        240: 15,
-        359: 15,
-        360: 45,
-        479: 45,
-        480: 60,
+        240: 0,
+        241: 15,
+        360: 15,
+        361: 45,
+        480: 45,
+        481: 60,
         540: 60,
     }
 
@@ -1106,7 +1107,7 @@ def test_request_based_generation_uses_break_rules_by_shift_length() -> None:
         time(11) <= start and end <= time(12)
         for start, end in break_windows_by_staff[str(middle_staff_id)]
     )
-    assert break_durations(break_windows_by_staff[str(long_staff_id)]) == [30, 30]
+    assert break_durations(break_windows_by_staff[str(long_staff_id)]) == [15, 30]
     assert all(
         time(11) <= start and end <= time(15)
         for start, end in break_windows_by_staff[str(long_staff_id)]
@@ -1381,7 +1382,7 @@ def test_request_based_generation_avoids_short_work_position_fragments() -> None
         scope=DateScope(type=OptimizationScopeType.DATE, date=date(2026, 7, 1)),
         shifts=[],
         requests=[
-            shift_request(staff_id, start_time=time(9), end_time=time(17))
+            shift_request(staff_id, start_time=time(9), end_time=time(17, 15))
             for staff_id in staff_ids
         ],
         staff_members=[staff_member(staff_id) for staff_id in staff_ids],
