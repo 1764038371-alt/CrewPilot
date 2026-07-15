@@ -162,6 +162,18 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
               <button
                 className="h-9 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
                 disabled={disabled}
+                onClick={() =>
+                  setRows((currentRows) =>
+                    currentRows.map((row) => ({ ...row, request_type: "off" }))
+                  )
+                }
+                type="button"
+              >
+                全員を休み希望
+              </button>
+              <button
+                className="h-9 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+                disabled={disabled}
                 onClick={() => saveMutation.mutate()}
                 type="button"
               >
