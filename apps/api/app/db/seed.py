@@ -371,9 +371,9 @@ async def main() -> None:
         planning_period = PlanningPeriod(
             id=PLANNING_PERIOD_ID,
             store_id=STORE_ID,
-            name="2026年7月前半シフト",
+            name="2026年7月シフト",
             start_date=date(2026, 7, 1),
-            end_date=date(2026, 7, 15),
+            end_date=date(2026, 7, 31),
             status="draft",
             request_deadline=None,
         )
