@@ -177,6 +177,15 @@ export function RightPanel({
   const criticalWarnings = visibleWarnings.filter((warning) => warning.severity === "critical");
 
   const selectWarning = (warning: ScheduleWarning) => {
+    const isShiftWideBreakShortage =
+      warning.warning_type === "BREAK_VIOLATION"
+      && typeof warning.details?.required_break_minutes === "number";
+    if (isShiftWideBreakShortage && warning.work_shift_id) {
+      setActiveWarning(warning.id, null);
+      selectWorkShift(warning.work_shift_id);
+      setActiveTab("details");
+      return;
+    }
     setActiveWarning(warning.id, warning.shift_segment_id);
     if (warning.shift_segment_id) {
       selectShiftSegment(warning.shift_segment_id);

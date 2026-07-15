@@ -198,11 +198,18 @@ export function ShiftGrid({ workspace, isLoading, isReadOnly = false, selectedDa
         ) : (
           orderedStaffMembers.map((staff) => {
             const shifts = shiftsByStaff.get(staff.id) ?? [];
+            const isSelectedStaff =
+              selection?.type === "workShift"
+              && shifts.some((shift) => shift.id === selection.id);
             return (
-              <div className="grid min-h-24" key={staff.id} style={{ gridTemplateColumns: `${STAFF_COLUMN_WIDTH}px ${timelineWidth}px` }}>
-                <div className="sticky left-0 z-10 border-r bg-neutral-50 p-3 text-left shadow-[1px_0_0_#e5e5e5]">
+              <div
+                className={`grid min-h-24 ${isSelectedStaff ? "bg-amber-50 ring-2 ring-inset ring-amber-400" : ""}`}
+                key={staff.id}
+                style={{ gridTemplateColumns: `${STAFF_COLUMN_WIDTH}px ${timelineWidth}px` }}
+              >
+                <div className={`sticky left-0 z-10 border-r p-3 text-left shadow-[1px_0_0_#e5e5e5] ${isSelectedStaff ? "bg-amber-100" : "bg-neutral-50"}`}>
                   <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    <span className={`h-2.5 w-2.5 rounded-full ${isSelectedStaff ? "bg-amber-500" : "bg-emerald-500"}`} />
                     <div className="text-sm font-semibold">{staff.employee_number ?? staffDisplayName(staff)}</div>
                   </div>
                   <div className="mt-1 pl-4 text-xs text-neutral-500">{staffDisplayName(staff)}</div>
@@ -268,7 +275,7 @@ export function ShiftGrid({ workspace, isLoading, isReadOnly = false, selectedDa
                 >
                   {shifts.map((shift) => (
                     <div
-                      className="absolute top-5 h-14"
+                      className={`absolute top-5 h-14 ${selection?.type === "workShift" && selection.id === shift.id ? "rounded ring-4 ring-amber-400 ring-offset-2" : ""}`}
                       key={shift.id}
                       onClick={(event) => {
                         clearMergeSelection();
