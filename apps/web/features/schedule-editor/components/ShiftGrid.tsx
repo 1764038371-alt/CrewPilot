@@ -649,6 +649,12 @@ function SegmentBlock({
   const task = workspace.task_types.find((item) => item.id === segment.task_type_id);
   const label = segment.segment_type === "WORK" ? position?.code : segment.segment_type === "TASK" ? task?.code : "BREAK";
   const displayLabel = segment.segment_type === "WORK" && segment.label ? segment.label : label;
+  const fullDisplayLabel =
+    displayLabel === "SH"
+      ? "SH / ショット"
+      : displayLabel === "ST"
+        ? "ST / スチーム"
+        : displayLabel ?? segment.segment_type;
   const durationMinutes = minutesBetween(segment.start_time, segment.end_time);
   const isTiny = durationMinutes <= 15;
   const isCompact = durationMinutes <= 30;
@@ -673,6 +679,7 @@ function SegmentBlock({
       onMouseEnter={() => onHover(segment.id)}
       onMouseLeave={() => onHover(null)}
       role="button"
+      title={fullDisplayLabel}
       style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
       tabIndex={0}
     >

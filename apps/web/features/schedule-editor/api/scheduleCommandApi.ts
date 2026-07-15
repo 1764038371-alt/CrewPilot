@@ -6,7 +6,7 @@ export type WorkShiftDraft = Partial<Pick<WorkShift, "start_time" | "end_time">>
 export type ShiftSegmentDraft = Partial<
   Pick<
     ShiftSegment,
-    "segment_type" | "position_id" | "task_type_id" | "is_locked" | "lock_scope" | "lock_reason"
+    "segment_type" | "position_id" | "task_type_id" | "label" | "is_locked" | "lock_scope" | "lock_reason"
   >
 >;
 

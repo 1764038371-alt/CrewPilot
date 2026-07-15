@@ -1575,6 +1575,15 @@ function ShiftSegmentEditor({
   const merged = { ...segment, ...draft };
   const isDirty = hasDraftValue(draft);
   const [splitTime, setSplitTime] = useState(midpointTime(segment.start_time, segment.end_time));
+  const selectedPosition = positions.find((position) => position.id === merged.position_id);
+  const bRoleLabel =
+    selectedPosition?.code === "B"
+      ? merged.label === "SH"
+        ? "SH / ショット"
+        : merged.label === "ST"
+          ? "ST / スチーム"
+          : "B / バリ（SH・ST未指定）"
+      : null;
 
   return (
     <div className="mt-2 space-y-3 rounded border p-3">
@@ -1585,6 +1594,11 @@ function ShiftSegmentEditor({
         <div>開始 {segment.start_time.slice(0, 5)}</div>
         <div>終了 {segment.end_time.slice(0, 5)}</div>
       </div>
+      {bRoleLabel && (
+        <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-900">
+          現在の担当: {bRoleLabel}
+        </div>
+      )}
       <Field label="種別">
         <select
           className="w-full rounded border px-2 py-1"
@@ -1607,7 +1621,14 @@ function ShiftSegmentEditor({
           <select
             className="w-full rounded border px-2 py-1"
             disabled={isReadOnly}
-            onChange={(event) => onChange({ position_id: event.target.value || null })}
+            onChange={(event) => {
+              const positionId = event.target.value || null;
+              const position = positions.find((item) => item.id === positionId);
+              onChange({
+                position_id: positionId,
+                label: position?.code === "B" ? merged.label : null
+              });
+            }}
             value={merged.position_id ?? ""}
           >
             <option value="">未選択</option>
@@ -1616,6 +1637,20 @@ function ShiftSegmentEditor({
                 {positionDisplayLabel(position.code, position.name)}
               </option>
             ))}
+          </select>
+        </Field>
+      )}
+      {merged.segment_type === "WORK" && selectedPosition?.code === "B" && (
+        <Field label="B内の担当">
+          <select
+            className="w-full rounded border px-2 py-1"
+            disabled={isReadOnly}
+            onChange={(event) => onChange({ label: event.target.value || null })}
+            value={merged.label ?? ""}
+          >
+            <option value="">未指定</option>
+            <option value="SH">SH / ショット</option>
+            <option value="ST">ST / スチーム</option>
           </select>
         </Field>
       )}

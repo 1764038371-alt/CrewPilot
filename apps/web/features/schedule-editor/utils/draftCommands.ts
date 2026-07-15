@@ -103,7 +103,8 @@ export function buildSegmentDraftCommand(
         type: "UpdateSegmentPosition",
         payload: {
           segment_id: segment.id,
-          position_id: positionId
+          position_id: positionId,
+          label: normalizeBLaneLabel(draft.label === undefined ? segment.label : draft.label)
         }
       }
     : null;
@@ -111,4 +112,8 @@ export function buildSegmentDraftCommand(
 
 function hasObjectKeys(value: object | undefined) {
   return Boolean(value && Object.keys(value).length > 0);
+}
+
+function normalizeBLaneLabel(value: string | null | undefined): "SH" | "ST" | null {
+  return value === "SH" || value === "ST" ? value : null;
 }
