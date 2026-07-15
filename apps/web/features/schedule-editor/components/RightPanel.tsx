@@ -717,6 +717,7 @@ function warningTitle(warning: ScheduleWarning) {
   const titles: Record<string, string> = {
     BREAK_VIOLATION: "休憩ルール違反",
     BC_COVERAGE: "B/C配置不足",
+    CLOSING_STAFF_SHORTAGE: "クローズ人数不足",
     DEPOSIT_INVALID_TIME: "入金Mの時間違反",
     DEPOSIT_MISSING: "入金Mの担当不足",
     OPEN_CLOSE_SKILL_SHORTAGE: "開店/閉店スキル不足",
@@ -775,6 +776,9 @@ function warningFixHint(warning: ScheduleWarning) {
   }
   if (warning.warning_type === "OPENING_STAFF_SHORTAGE") {
     return "対処: 開店時刻から勤務できるスタッフを増やし、オープンBとオープンCを分担します。";
+  }
+  if (warning.warning_type === "CLOSING_STAFF_SHORTAGE") {
+    return "対処: 閉店時刻まで勤務できるスタッフを増やし、クローズを3人以上にします。";
   }
   if (warning.warning_type === "OPEN_CLOSE_SKILL_SHORTAGE") {
     return "対処: オープンB/オープンCなど該当スキルを持つスタッフを開店・閉店帯へ配置します。";

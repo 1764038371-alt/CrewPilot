@@ -194,6 +194,36 @@ def test_bc_coverage_warning_detects_missing_b() -> None:
     assert warnings[0].details["missing_position_codes"] == ["B"]
 
 
+def test_closing_with_only_two_staff_is_critical() -> None:
+    service = WarningService(session=None)  # type: ignore[arg-type]
+    shifts = [
+        SimpleNamespace(
+            id=UUID(f"10000000-0000-0000-0000-00000000003{index}"),
+            staff_member_id=staff_id,
+            work_date=date(2026, 7, 5),
+            start_time=time(14),
+            end_time=time(21),
+        )
+        for index, staff_id in enumerate([STAFF_ID, STAFF_SECOND_ID], start=1)
+    ]
+
+    warnings = service._closing_staff_shortage_warnings(
+        schedule_version_id=SHIFT_ID,
+        shifts=shifts,
+        store=SimpleNamespace(
+            closing_time=time(21),
+            business_hours={},
+            operational_settings={},
+        ),
+    )
+
+    assert len(warnings) == 1
+    assert warnings[0].warning_type == "CLOSING_STAFF_SHORTAGE"
+    assert warnings[0].severity == "critical"
+    assert warnings[0].details["current_count"] == 2
+    assert warnings[0].details["min_staff_count"] == 3
+
+
 def test_position_mix_warning_detects_missing_f_for_three_active_staff() -> None:
     service = WarningService(session=None)  # type: ignore[arg-type]
     shift_ids = [

@@ -21,6 +21,7 @@ export function ShiftGrid({ workspace, isLoading, isReadOnly = false, selectedDa
   const hoveredSegmentId = useSelectionStore((state) => state.hoveredSegmentId);
   const scrollTargetSegmentId = useSelectionStore((state) => state.scrollTargetSegmentId);
   const selectShiftSegment = useSelectionStore((state) => state.selectShiftSegment);
+  const clearSelection = useSelectionStore((state) => state.clearSelection);
   const setHoveredSegment = useSelectionStore((state) => state.setHoveredSegment);
   const requestSegmentScroll = useSelectionStore((state) => state.requestSegmentScroll);
   const activeProposalSegmentIds = useProposalStore((state) => state.activeProposalSegmentIds);
@@ -33,6 +34,18 @@ export function ShiftGrid({ workspace, isLoading, isReadOnly = false, selectedDa
   const [mergeSelection, setMergeSelection] = useState<string[]>([]);
   const gridViewportRef = useRef<HTMLElement | null>(null);
   const [gridViewportWidth, setGridViewportWidth] = useState(0);
+
+  useEffect(() => {
+    if (selection?.type !== "workShift") {
+      return;
+    }
+    const clearOnNextPointer = () => clearSelection();
+    document.addEventListener("pointerdown", clearOnNextPointer, {
+      capture: true,
+      once: true
+    });
+    return () => document.removeEventListener("pointerdown", clearOnNextPointer, true);
+  }, [clearSelection, selection]);
 
   useEffect(() => {
     if (!scrollTargetSegmentId) {

@@ -54,6 +54,9 @@ class WarningService:
                 store,
             )
         )
+        warnings.extend(
+            self._closing_staff_shortage_warnings(schedule_version_id, shifts, store)
+        )
         warnings.extend(self._break_violation_warnings(schedule_version_id, shifts, segments))
         warnings.extend(
             self._skill_mismatch_warnings(
@@ -482,6 +485,53 @@ class WarningService:
                         },
                     )
                 )
+        return warnings
+
+    def _closing_staff_shortage_warnings(
+        self,
+        schedule_version_id: UUID,
+        shifts: list[WorkShift],
+        store: Store | None,
+    ) -> list[ScheduleWarning]:
+        minimum_staff_count = 3
+        if store and isinstance(store.operational_settings, dict):
+            configured_count = store.operational_settings.get("minimum_closing_staff_count")
+            if isinstance(configured_count, int) and configured_count > 0:
+                minimum_staff_count = configured_count
+
+        warnings = []
+        for work_date in sorted({shift.work_date for shift in shifts}):
+            close_time = closing_time_for_date(store, work_date)
+            closing_shifts = [
+                shift
+                for shift in shifts
+                if shift.work_date == work_date
+                and shift.start_time < close_time
+                and shift.end_time >= close_time
+            ]
+            closing_staff_ids = {shift.staff_member_id for shift in closing_shifts}
+            if len(closing_staff_ids) >= minimum_staff_count:
+                continue
+            warnings.append(
+                ScheduleWarning(
+                    schedule_version_id=schedule_version_id,
+                    work_shift_id=None,
+                    shift_segment_id=None,
+                    warning_type="CLOSING_STAFF_SHORTAGE",
+                    severity="critical",
+                    message=(
+                        f"クローズ人数が不足しています。現在{len(closing_staff_ids)}人、"
+                        f"必要{minimum_staff_count}人です。"
+                    ),
+                    details={
+                        "date": work_date.isoformat(),
+                        "start_time": add_minutes(close_time, -30).isoformat(),
+                        "end_time": close_time.isoformat(),
+                        "current_count": len(closing_staff_ids),
+                        "min_staff_count": minimum_staff_count,
+                    },
+                )
+            )
         return warnings
 
     def _opening_coverage_warnings(
