@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { getSetup, saveSetup, type SetupWrite, type StaffSetupWrite } from "../api/operationsApi";
 import type { SetupData, StaffSkillRead } from "../api/operationsApi";
@@ -536,15 +536,31 @@ function SplitTimeSelect({
   const normalizedValue = normalizeSplitTimeValue(value);
   const [pendingValue, setPendingValue] = useState(normalizedValue);
   const [selectedHour, selectedMinute] = pendingValue.split(":");
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const commitPendingValue = () => {
     onChange(pendingValue);
     setOpen(false);
   };
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        onChange(pendingValue);
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+  }, [onChange, open, pendingValue]);
+
   return (
     <div
       className={`relative inline-block text-left ${className}`}
+      ref={containerRef}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           if (open) {

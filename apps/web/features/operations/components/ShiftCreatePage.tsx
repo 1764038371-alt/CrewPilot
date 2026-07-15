@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { applyProposal, generateProposal } from "@/features/schedule-editor/api/proposalApi";
 import type { StaffMember, Uuid } from "@/features/schedule-editor/types";
 import { positionDisplayLabel } from "@/features/schedule-editor/utils/positionLabels";
@@ -425,15 +425,31 @@ function TimeSelect({
   const normalizedValue = normalizeTimeValue(value);
   const [pendingValue, setPendingValue] = useState(normalizedValue);
   const [selectedHour, selectedMinute] = pendingValue.split(":");
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const commitPendingValue = () => {
     onChange(pendingValue);
     setOpen(false);
   };
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        onChange(pendingValue);
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+  }, [onChange, open, pendingValue]);
+
   return (
     <div
       className="relative inline-block w-24 text-left"
+      ref={containerRef}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           if (open) {
