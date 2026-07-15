@@ -195,7 +195,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
             <RequestSummaryItem label="登録スタッフ" value={`${staffMembers.length}人`} />
           </div>
           <p className="mt-2 text-xs text-neutral-500">
-            休み希望のスタッフは割当対象外です。勤務希望だけ開始・終了時刻を選んでください。
+            休み希望のスタッフは割当対象外です。開始・終了時刻を変更すると、自動で勤務希望に切り替わります。
           </p>
           {saveMutation.isSuccess && <p className="mt-2 text-sm text-emerald-700">希望シフトを保存しました。</p>}
           {(saveMutation.isError || proposalMutation.isError) && (
@@ -263,17 +263,25 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
                       </td>
                       <td className="border p-2 text-center">
                         <TimeSelect
-                          disabled={row.request_type === "off"}
                           label={`${staffLabel(staff)} 開始時刻`}
-                          onChange={(value) => updateRow(rows, setRows, index, { start_time: value })}
+                          onChange={(value) =>
+                            updateRow(rows, setRows, index, {
+                              request_type: "available",
+                              start_time: value
+                            })
+                          }
                           value={row.start_time}
                         />
                       </td>
                       <td className="border p-2 text-center">
                         <TimeSelect
-                          disabled={row.request_type === "off"}
                           label={`${staffLabel(staff)} 終了時刻`}
-                          onChange={(value) => updateRow(rows, setRows, index, { end_time: value })}
+                          onChange={(value) =>
+                            updateRow(rows, setRows, index, {
+                              request_type: "available",
+                              end_time: value
+                            })
+                          }
                           value={row.end_time}
                         />
                       </td>
