@@ -34,6 +34,8 @@ BREAK_SHIFT_EDGE_BUFFER_MINUTES = 120
 MIN_BREAK_SHIFT_EDGE_BUFFER_MINUTES = 105
 AVAILABLE_REQUEST_TYPES = {"available", "preferred", "ok"}
 BLOCKING_REQUEST_TYPES = {"unavailable", "off", "ng"}
+MAX_ASSIGNMENT_CANDIDATES = 256
+ASSIGNMENT_BEAM_WIDTH = 64
 
 
 @dataclass(frozen=True)
@@ -898,8 +900,6 @@ class ORToolsSolver(ScheduleSolver):
         paths: list[tuple[int, dict[UUID, str], dict[UUID, int], list[dict[UUID, str]]]] = [
             (0, {}, {}, [])
         ]
-        beam_width = 240
-
         for start_time, end_time, active_requests in interval_rows:
             start_minute = time_to_minutes(start_time)
             candidates = self._assignment_candidates_for_interval(
@@ -937,7 +937,7 @@ class ORToolsSolver(ScheduleSolver):
                             [*history, candidate],
                         )
                     )
-            paths = sorted(next_paths, key=lambda item: item[0])[:beam_width]
+            paths = sorted(next_paths, key=lambda item: item[0])[:ASSIGNMENT_BEAM_WIDTH]
 
         best = min(paths, key=lambda item: item[0])
         assignments_by_interval: dict[tuple[time, time], dict[UUID, str]] = {}
@@ -957,10 +957,8 @@ class ORToolsSolver(ScheduleSolver):
         candidates: list[dict[UUID, str]] = []
         staff_ids = [request.staff_member_id for request in active_requests]
 
-        max_candidates = 50_000
-
         def search(index: int, remaining: Counter[str], assignment: dict[UUID, str]) -> None:
-            if len(candidates) >= max_candidates:
+            if len(candidates) >= MAX_ASSIGNMENT_CANDIDATES:
                 return
             if index == len(staff_ids):
                 candidates.append(dict(assignment))

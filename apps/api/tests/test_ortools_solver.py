@@ -1025,6 +1025,31 @@ def test_interval_assignment_avoids_churn_for_very_short_intervals() -> None:
     assert assignments[(time(10), time(10, 15))] == assignments[(time(9), time(10))]
 
 
+def test_interval_assignment_handles_eleven_simultaneous_staff() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    staff_ids = [
+        UUID(f"30000000-0000-0000-0000-{index:012d}")
+        for index in range(1, 12)
+    ]
+    requests = [SimpleNamespace(staff_member_id=staff_id) for staff_id in staff_ids]
+
+    assignments = solver._assign_positions_across_intervals(
+        [
+            (time(9), time(10), requests),
+            (time(10), time(10, 30), requests),
+            (time(10, 30), time(12), requests),
+        ],
+        positions_by_code(),
+        all_position_skills(),
+        all_position_staff_skills(staff_ids),
+    )
+
+    expected_counts = Counter({"B": 3, "C": 2, "F": 3, "S": 3})
+    assert Counter(assignments[(time(9), time(10))].values()) == expected_counts
+    assert Counter(assignments[(time(10), time(10, 30))].values()) == expected_counts
+    assert Counter(assignments[(time(10, 30), time(12))].values()) == expected_counts
+
+
 def test_interval_assignment_rotates_long_cashier_without_short_churn() -> None:
     solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
     staff_ids = [
