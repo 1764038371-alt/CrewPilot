@@ -925,7 +925,9 @@ class ORToolsSolver(ScheduleSolver):
                     )
                     next_paths.append(
                         (
-                            score + transition_score,
+                            score
+                            + transition_score
+                            + position_variety_penalty(candidate, history),
                             {**previous_codes, **candidate},
                             next_started,
                             [*history, candidate],
@@ -1808,7 +1810,9 @@ class ORToolsSolver(ScheduleSolver):
                     )
                     next_paths.append(
                         (
-                            score + transition_score,
+                            score
+                            + transition_score
+                            + position_variety_penalty(candidate, history),
                             {**previous_codes, **candidate},
                             next_started,
                             [*history, candidate],
@@ -4178,6 +4182,25 @@ def position_change_penalty(elapsed: int) -> int:
     if elapsed <= SOFT_MAX_POSITION_BLOCK_MINUTES:
         return 0
     return 50
+
+
+def position_variety_penalty(
+    candidate: dict[UUID, str],
+    assignment_history: list[dict[UUID, str]],
+) -> int:
+    """Prefer a new qualified position once minimum block lengths are satisfied."""
+    penalty = 0
+    for staff_member_id, position_code in candidate.items():
+        previous_codes = [
+            assignment[staff_member_id]
+            for assignment in assignment_history
+            if staff_member_id in assignment
+        ]
+        repeat_count = sum(code == position_code for code in previous_codes)
+        distinct_count = len(set(previous_codes))
+        if repeat_count and distinct_count < 4:
+            penalty += repeat_count * 6_000
+    return penalty
 
 
 def can_merge_planned_segments(previous: dict, segment: dict) -> bool:
