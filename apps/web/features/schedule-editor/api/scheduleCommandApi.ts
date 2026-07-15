@@ -121,6 +121,7 @@ export type ScheduleCommand =
       payload: {
         segment_id: Uuid;
         position_id: Uuid;
+        label?: "SH" | "ST" | null;
       };
     }
   | {

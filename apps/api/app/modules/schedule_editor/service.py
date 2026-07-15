@@ -237,12 +237,19 @@ class ScheduleCommandService:
             after = self._segment_snapshot(segment)
         elif isinstance(command, UpdateSegmentPositionCommand):
             segment = await self._get_segment(schedule_version_id, command.payload.segment_id)
-            await self._validate_position(schedule_version.store_id, command.payload.position_id)
+            position = await self._validate_position(
+                schedule_version.store_id, command.payload.position_id
+            )
+            if command.payload.label in {"SH", "ST"} and position.code != "B":
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="SH/ST labels can only be assigned to position B",
+                )
             before = self._segment_snapshot(segment)
             segment.segment_type = "WORK"
             segment.position_id = command.payload.position_id
             segment.task_type_id = None
-            segment.label = None
+            segment.label = command.payload.label
             segment_id = segment.id
             after = self._segment_snapshot(segment)
         elif isinstance(command, UpdateSegmentTaskCommand):
@@ -983,13 +990,14 @@ class ScheduleCommandService:
         await self.session.flush()
         return segment
 
-    async def _validate_position(self, store_id: UUID, position_id: UUID) -> None:
+    async def _validate_position(self, store_id: UUID, position_id: UUID) -> Position:
         position = await self.session.get(Position, position_id)
         if position is None or position.store_id != store_id:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Position not found",
             )
+        return position
 
     async def _validate_task_type(self, store_id: UUID, task_type_id: UUID) -> None:
         task_type = await self.session.get(TaskType, task_type_id)
@@ -1263,6 +1271,7 @@ def inverse_segment_assignment(before: dict) -> dict | None:
             "payload": {
                 "segment_id": before["id"],
                 "position_id": before["position_id"],
+                "label": before.get("label"),
             },
         }
     if before.get("segment_type") == "TASK" and before.get("task_type_id") is not None:

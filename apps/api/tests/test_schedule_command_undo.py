@@ -85,5 +85,6 @@ def test_update_segment_position_inverse_restores_previous_position() -> None:
         "payload": {
             "segment_id": "90000000-0000-0000-0000-000000000001",
             "position_id": "50000000-0000-0000-0000-000000000001",
+            "label": None,
         },
     }

@@ -225,6 +225,7 @@ class ResizeSegmentPayload(BaseModel):
 class UpdateSegmentPositionPayload(BaseModel):
     segment_id: UUID
     position_id: UUID
+    label: Optional[Literal["SH", "ST"]] = None
 
 
 class UpdateSegmentTaskPayload(BaseModel):

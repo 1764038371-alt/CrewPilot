@@ -1162,7 +1162,8 @@ export function autoMergeCommandsAfterCommand(
 }
 
 type SegmentOption = {
-  code: "B" | "C" | "F" | "S" | "M" | "BREAK";
+  assignmentLabel?: "SH" | "ST";
+  code: "B" | "SH" | "ST" | "C" | "F" | "S" | "M" | "BREAK";
   enabled: boolean;
   id?: string;
   isCurrent: boolean;
@@ -1191,12 +1192,33 @@ function segmentOptions(
       code,
       enabled: Boolean(position && hasSkill),
       id: position?.id,
-      isCurrent: segment.segment_type === "WORK" && segment.position_id === position?.id,
+      isCurrent:
+        segment.segment_type === "WORK"
+        && segment.position_id === position?.id
+        && (code !== "B" || !["SH", "ST"].includes(segment.label ?? "")),
       label: positionDisplayLabel(code, position?.name),
       reason: !position ? "ポジション未設定" : hasSkill ? `${code}スキルあり` : `${code}スキルなし`,
       type: "position"
     };
   });
+  const bPosition = workspace.positions.find((item) => item.code === "B");
+  const bSkill = workspace.skill_definitions.find(
+    (item) => item.code === "B" && item.skill_category === "position"
+  );
+  const hasB = Boolean(bSkill && staffSkillIds.has(bSkill.id));
+  const laneOptions: SegmentOption[] = (["SH", "ST"] as const).map((label) => ({
+    assignmentLabel: label,
+    code: label,
+    enabled: Boolean(bPosition && hasB),
+    id: bPosition?.id,
+    isCurrent:
+      segment.segment_type === "WORK"
+      && segment.position_id === bPosition?.id
+      && segment.label === label,
+    label: `${label} / ${label === "SH" ? "ショット" : "スチーム"}`,
+    reason: hasB ? `B / バリの${label}担当` : "B / バリスキルなし",
+    type: "position"
+  }));
   const taskM = workspace.task_types.find((item) => item.code === "M");
   const mSkill = workspace.skill_definitions.find(
     (item) => item.code === "M" && item.skill_category === "task"
@@ -1219,7 +1241,9 @@ function segmentOptions(
     type: "task"
   };
   return [
-    ...positionOptions,
+    ...positionOptions.slice(0, 1),
+    ...laneOptions,
+    ...positionOptions.slice(1),
     mOption,
     {
       code: "BREAK",
@@ -1360,7 +1384,8 @@ function commandForOption(segment: ShiftSegment, option: SegmentOption): Schedul
       type: "UpdateSegmentPosition",
       payload: {
         segment_id: segment.id,
-        position_id: option.id
+        position_id: option.id,
+        label: option.assignmentLabel ?? null
       }
     };
   }
@@ -1850,6 +1875,7 @@ export function applyDraftCommands(
         segment.segment_type = "WORK";
         segment.position_id = command.payload.position_id;
         segment.task_type_id = null;
+        segment.label = command.payload.label ?? null;
       }
     }
     if (command.type === "UpdateSegmentTask") {
@@ -1858,6 +1884,7 @@ export function applyDraftCommands(
         segment.segment_type = "TASK";
         segment.position_id = null;
         segment.task_type_id = command.payload.task_type_id;
+        segment.label = null;
       }
     }
     if (command.type === "UpdateSegmentBreak") {
@@ -1866,6 +1893,7 @@ export function applyDraftCommands(
         segment.segment_type = "BREAK";
         segment.position_id = null;
         segment.task_type_id = null;
+        segment.label = null;
       }
     }
   }
