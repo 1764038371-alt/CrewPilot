@@ -1841,7 +1841,7 @@ class ORToolsSolver(ScheduleSolver):
                             [*history, candidate],
                         )
                     )
-            paths = sorted(next_paths, key=lambda item: item[0])[:240]
+            paths = sorted(next_paths, key=lambda item: item[0])[:ASSIGNMENT_BEAM_WIDTH]
         if not paths:
             return
 
@@ -1936,7 +1936,7 @@ class ORToolsSolver(ScheduleSolver):
                             [*history, candidate],
                         )
                     )
-            paths = sorted(next_paths, key=lambda item: item[0])[:240]
+            paths = sorted(next_paths, key=lambda item: item[0])[:ASSIGNMENT_BEAM_WIDTH]
 
         if not paths:
             return
@@ -1980,6 +1980,8 @@ class ORToolsSolver(ScheduleSolver):
         candidates: list[dict[UUID, str]] = []
 
         def search(index: int, remaining: Counter[str], assignment: dict[UUID, str]) -> None:
+            if len(candidates) >= MAX_ASSIGNMENT_CANDIDATES:
+                return
             if index == len(staff_ids):
                 if all(count == 0 for count in remaining.values()):
                     candidates.append(dict(assignment))
@@ -2051,9 +2053,14 @@ class ORToolsSolver(ScheduleSolver):
 
         best: list[tuple[int, dict[UUID, str]]] = []
         assignment: dict[UUID, str] = {}
+        evaluated_candidates = 0
 
         def search(index: int) -> None:
+            nonlocal evaluated_candidates
+            if evaluated_candidates >= MAX_ASSIGNMENT_CANDIDATES:
+                return
             if index == len(staff_options):
+                evaluated_candidates += 1
                 candidate = dict(assignment)
                 score = best_effort_mix_score(candidate, active_work, required_counts)
                 best.append((score, candidate))

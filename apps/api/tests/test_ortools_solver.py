@@ -5,7 +5,11 @@ from typing import Optional
 from uuid import UUID
 
 from app.modules.optimization.scope import DateScope, FullScope, OptimizationScopeType
-from app.modules.optimization.solver.ortools_solver import ORToolsSolver, fairness_score
+from app.modules.optimization.solver.ortools_solver import (
+    MAX_ASSIGNMENT_CANDIDATES,
+    ORToolsSolver,
+    fairness_score,
+)
 from app.modules.schedule_editor.warnings import WarningService, requirement_shortage_windows
 
 SHIFT_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -1048,6 +1052,29 @@ def test_interval_assignment_handles_eleven_simultaneous_staff() -> None:
     assert Counter(assignments[(time(9), time(10))].values()) == expected_counts
     assert Counter(assignments[(time(10), time(10, 30))].values()) == expected_counts
     assert Counter(assignments[(time(10, 30), time(12))].values()) == expected_counts
+
+
+def test_exact_mix_candidates_are_bounded_for_eleven_simultaneous_staff() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    staff_ids = [
+        UUID(f"30000000-0000-0000-0000-{index:012d}")
+        for index in range(1, 12)
+    ]
+    active_work = [
+        (staff_id, {"position_code": "B"})
+        for staff_id in staff_ids
+    ]
+
+    candidates = solver._exact_mix_candidates_for_active_work(
+        active_work,
+        positions_by_code(),
+        all_position_skills(),
+        all_position_staff_skills(staff_ids),
+    )
+
+    expected_counts = Counter({"B": 3, "C": 2, "F": 3, "S": 3})
+    assert len(candidates) == MAX_ASSIGNMENT_CANDIDATES
+    assert all(Counter(candidate.values()) == expected_counts for candidate in candidates)
 
 
 def test_interval_assignment_rotates_long_cashier_without_short_churn() -> None:
