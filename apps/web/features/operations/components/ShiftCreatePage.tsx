@@ -248,7 +248,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
                 {rows.map((row, index) => {
                   const staff = draftQuery.data?.staff_members.find((item) => item.id === row.staff_member_id);
                   return (
-                    <tr className={row.request_type === "off" ? "bg-neutral-50 text-neutral-400" : undefined} key={row.staff_member_id}>
+                    <tr className={row.request_type === "off" ? "bg-neutral-50" : undefined} key={row.staff_member_id}>
                       <td className="border p-2 font-medium">{staffLabel(staff)}</td>
                       <td className="border p-2 text-neutral-500">{staffDisplayName(staff)}</td>
                       <td className="border p-2 text-center">
@@ -504,7 +504,7 @@ function TimeSelect({
       <button
         aria-expanded={open}
         aria-label={label}
-        className="flex h-9 w-full items-center justify-between rounded border bg-white px-2 text-sm font-medium shadow-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+        className="flex h-9 w-full cursor-pointer items-center justify-between rounded border bg-white px-2 text-sm font-medium text-neutral-950 shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
         disabled={disabled}
         onClick={() => {
           if (open) {
