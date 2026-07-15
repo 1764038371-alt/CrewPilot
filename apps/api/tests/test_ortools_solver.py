@@ -23,6 +23,7 @@ TASK_M_ID = UUID("60000000-0000-0000-0000-000000000001")
 SKILL_M_ID = UUID("70000000-0000-0000-0000-000000000004")
 STAFF_SECOND_ID = UUID("30000000-0000-0000-0000-000000000002")
 SKILL_C_OPEN_ID = UUID("70000000-0000-0000-0000-000000000005")
+SKILL_B_OPEN_ID = UUID("70000000-0000-0000-0000-000000000006")
 
 
 def test_request_constraint_prevents_assignment_outside_available_time() -> None:
@@ -295,6 +296,63 @@ def test_open_segment_requires_matching_open_skill() -> None:
         [skill(SKILL_C_OPEN_ID, POSITION_C_ID, code="C_OPEN", skill_category="opening")],
         [staff_skill(SKILL_C_OPEN_ID)],
     )
+
+
+def test_request_generation_never_assigns_open_c_to_normal_c_only_staff() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    planned = {
+        STAFF_ID: [
+            {
+                "start_time": time(8, 30),
+                "end_time": time(10, 30),
+                "segment_type": "WORK",
+                "position_code": "C",
+                "position_id": POSITION_C_ID,
+                "task_type_id": None,
+                "label": None,
+            }
+        ],
+        STAFF_SECOND_ID: [
+            {
+                "start_time": time(8, 30),
+                "end_time": time(10, 30),
+                "segment_type": "WORK",
+                "position_code": "B",
+                "position_id": POSITION_B_ID,
+                "task_type_id": None,
+                "label": None,
+            }
+        ],
+    }
+    skills = [
+        skill(SKILL_C_ID, POSITION_C_ID),
+        skill(SKILL_B_ID, POSITION_B_ID),
+        skill(SKILL_C_OPEN_ID, POSITION_C_ID, code="C_OPEN", skill_category="opening"),
+        skill(SKILL_B_OPEN_ID, POSITION_B_ID, code="B_OPEN", skill_category="opening"),
+    ]
+    staff_skills = [
+        staff_skill(SKILL_C_ID, STAFF_ID),
+        staff_skill(SKILL_B_ID, STAFF_ID),
+        staff_skill(SKILL_B_OPEN_ID, STAFF_ID),
+        staff_skill(SKILL_C_ID, STAFF_SECOND_ID),
+        staff_skill(SKILL_B_ID, STAFF_SECOND_ID),
+        staff_skill(SKILL_C_OPEN_ID, STAFF_SECOND_ID),
+    ]
+
+    solver._apply_opening_role_skills(
+        planned,
+        date(2026, 7, 1),
+        SimpleNamespace(opening_time=time(8, 30), business_hours={}),
+        {
+            "B": position(POSITION_B_ID, "B"),
+            "C": position(POSITION_C_ID, "C"),
+        },
+        skills,
+        staff_skills,
+    )
+
+    assert planned[STAFF_ID][0]["label"] == "B_OPEN"
+    assert planned[STAFF_SECOND_ID][0]["label"] == "C_OPEN"
 
 
 def test_work_shift_generation_creates_proposal_for_shortage() -> None:

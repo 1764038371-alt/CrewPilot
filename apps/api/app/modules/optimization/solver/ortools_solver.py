@@ -89,6 +89,7 @@ class ORToolsSolver(ScheduleSolver):
             skills=skills,
             staff_skills=staff_skills,
             task_types=task_types,
+            store=store,
         )
         if request_generation_changes:
             before_counts = warning_counts(warnings_before)
@@ -489,6 +490,7 @@ class ORToolsSolver(ScheduleSolver):
         skills: list[SkillDefinition],
         staff_skills: list[StaffSkill],
         task_types: list[TaskType],
+        store: Store | None = None,
     ) -> list[SolverChange]:
         target_date = scope_date(scope)
         if target_date is None:
@@ -548,6 +550,7 @@ class ORToolsSolver(ScheduleSolver):
             staff_skills=staff_skills,
             task_types=task_types,
             staff_by_id=staff_by_id,
+            store=store,
         )
         if not segments_by_staff:
             return []
@@ -675,6 +678,7 @@ class ORToolsSolver(ScheduleSolver):
         staff_skills: list[StaffSkill],
         task_types: list[TaskType],
         staff_by_id: dict[UUID, StaffMember],
+        store: Store | None = None,
     ) -> dict[UUID, list[dict]]:
         fixed_boundaries = {
             minute
@@ -780,11 +784,100 @@ class ORToolsSolver(ScheduleSolver):
             skills,
             staff_skills,
         )
+        self._apply_opening_role_skills(
+            planned,
+            target_date,
+            store,
+            positions_by_code,
+            skills,
+            staff_skills,
+        )
         self._sync_planned_position_codes(planned, positions_by_code)
         self._normalize_b_lane_labels(planned)
         for segments in planned.values():
             self._merge_adjacent_planned_segments(segments)
         return planned
+
+    def _apply_opening_role_skills(
+        self,
+        planned: dict[UUID, list[dict]],
+        target_date: date,
+        store: Store | None,
+        positions_by_code: dict[str, Position],
+        skills: list[SkillDefinition],
+        staff_skills: list[StaffSkill],
+    ) -> None:
+        """Assign opening B/C only to staff with the matching opening skill."""
+        open_time = opening_time_for_date(store, target_date)
+        active_work = self._active_work_segments(
+            planned,
+            open_time,
+            add_minutes(open_time, 15),
+        )
+        if len(active_work) < 2:
+            return
+
+        candidates = self._exact_mix_candidates_for_active_work(
+            active_work,
+            positions_by_code,
+            skills,
+            staff_skills,
+        )
+        skill_ids_by_code = {
+            skill.code: skill.id
+            for skill in skills
+            if skill.code in {"B_OPEN", "C_OPEN"}
+            and getattr(skill, "is_active", True)
+        }
+        staff_skill_pairs = {
+            (staff_skill.staff_member_id, staff_skill.skill_definition_id)
+            for staff_skill in staff_skills
+        }
+
+        def covers_opening_roles(assignment: dict[UUID, str]) -> bool:
+            for position_code in ("B", "C"):
+                skill_id = skill_ids_by_code.get(f"{position_code}_OPEN")
+                assigned_staff_id = next(
+                    (
+                        staff_member_id
+                        for staff_member_id, assigned_code in assignment.items()
+                        if assigned_code == position_code
+                    ),
+                    None,
+                )
+                if skill_id is None or assigned_staff_id is None:
+                    return False
+                if (assigned_staff_id, skill_id) not in staff_skill_pairs:
+                    return False
+            return True
+
+        valid_assignments = [
+            candidate for candidate in candidates if covers_opening_roles(candidate)
+        ]
+        if not valid_assignments:
+            return
+
+        current_codes = {
+            staff_member_id: segment.get("position_code")
+            for staff_member_id, segment in active_work
+        }
+        assignment = min(
+            valid_assignments,
+            key=lambda candidate: sum(
+                candidate.get(staff_member_id) != current_codes.get(staff_member_id)
+                for staff_member_id in candidate
+            ),
+        )
+        for staff_member_id, segment in active_work:
+            position_code = assignment.get(staff_member_id)
+            position = positions_by_code.get(position_code or "")
+            if position is None:
+                continue
+            segment["position_code"] = position_code
+            segment["position_id"] = position.id
+            segment["label"] = (
+                f"{position_code}_OPEN" if position_code in {"B", "C"} else None
+            )
 
     def _assign_positions_across_intervals(
         self,
@@ -4199,6 +4292,25 @@ def closing_time_for_date(store: Store | None, target_date: date) -> time:
         if isinstance(day_hours, dict) and isinstance(day_hours.get("close"), str):
             return time.fromisoformat(day_hours["close"])
     return store.closing_time
+
+
+def opening_time_for_date(store: Store | None, target_date: date) -> time:
+    if store is None:
+        return time(9, 0)
+    business_hours = store.business_hours or {}
+    day_type = "holiday" if target_date.weekday() >= 5 else "weekday"
+    hours = business_hours.get(day_type)
+    if isinstance(hours, dict) and isinstance(hours.get("opening_time"), str):
+        return time.fromisoformat(hours["opening_time"])
+    if isinstance(hours, dict) and isinstance(hours.get("open"), str):
+        return time.fromisoformat(hours["open"])
+    weekday_key = target_date.strftime("%A").lower()
+    daily_hours = business_hours.get("daily")
+    if isinstance(daily_hours, dict):
+        day_hours = daily_hours.get(weekday_key)
+        if isinstance(day_hours, dict) and isinstance(day_hours.get("open"), str):
+            return time.fromisoformat(day_hours["open"])
+    return store.opening_time
 
 
 def fallback_window_snapshot(window: tuple[date, time, time] | None) -> dict | None:
