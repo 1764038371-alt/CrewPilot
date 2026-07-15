@@ -29,6 +29,8 @@ services:
         value: ortools
       - key: CREWPILOT_LOGIN_PASSWORD
         sync: false
+      - key: CREWPILOT_ADMIN_EMAIL
+        sync: false
 
   - type: web
     name: crewpilot-web

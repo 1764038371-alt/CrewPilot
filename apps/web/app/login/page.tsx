@@ -7,28 +7,10 @@ import { ApiError } from "@/lib/api/client";
 import { login } from "@/features/auth/api/authApi";
 
 const workspacePath = "/planning-periods/20000000-0000-0000-0000-000000000001/workspace";
-const quickUsers = [
-  {
-    email: "manager@example.com",
-    label: "店長",
-    description: "編集・AI提案・公開まで操作できます。"
-  },
-  {
-    email: "admin@example.com",
-    label: "管理者",
-    description: "すべての操作を確認できます。"
-  },
-  {
-    email: "viewer@example.com",
-    label: "閲覧者",
-    description: "編集不可の表示確認に使います。"
-  }
-];
-
 export default function LoginPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [email, setEmail] = useState("manager@example.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const loginMutation = useMutation({
     mutationFn: (payload?: { email: string; password: string }) =>
@@ -68,37 +50,15 @@ export default function LoginPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">CrewPilot</p>
         <h1 className="mt-2 text-2xl font-semibold">ログイン</h1>
         <p className="mt-2 text-sm text-neutral-600">
-          共有されたパスワードを知っている人だけがCrewPilotに入れます。
+          登録済みの管理者アカウントでログインしてください。
         </p>
         {errorMessage && (
           <div className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {errorMessage}
           </div>
         )}
-        <div className="mt-5 grid gap-2">
-          <p className="text-xs font-semibold text-neutral-500">アカウントを選択</p>
-          {quickUsers.map((user) => (
-            <button
-              className="rounded border bg-white p-3 text-left text-sm hover:bg-neutral-50 disabled:opacity-50"
-              disabled={loginMutation.isPending}
-              key={user.email}
-              onClick={() => {
-                setEmail(user.email);
-              }}
-              type="button"
-            >
-              <span className="block font-semibold">{user.label}</span>
-              <span className="mt-1 block text-xs text-neutral-500">{user.description}</span>
-            </button>
-          ))}
-        </div>
-        <div className="my-5 flex items-center gap-3 text-xs text-neutral-400">
-          <span className="h-px flex-1 bg-neutral-200" />
-          直接入力
-          <span className="h-px flex-1 bg-neutral-200" />
-        </div>
         <form
-          className="space-y-3"
+          className="mt-5 space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
             loginMutation.mutate({ email, password });
@@ -131,7 +91,7 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="mt-4 text-xs leading-5 text-neutral-500">
-          パスワードは管理者から共有されたものを入力してください。
+          ログイン情報を第三者と共有しないでください。
         </p>
       </section>
     </main>

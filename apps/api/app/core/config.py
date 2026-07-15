@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = False
     session_cookie_samesite: str = "lax"
     crewpilot_login_password: str = "password"
+    crewpilot_admin_email: str = ""
+    crewpilot_admin_display_name: str = "管理者"
 
     @property
     def async_database_url(self) -> str:
