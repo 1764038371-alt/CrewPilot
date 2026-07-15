@@ -533,7 +533,10 @@ function TimeSelect({
                 }`}
                 key={minute}
                 onClick={() => {
-                  setPendingValue(`${selectedHour}:${minute}`);
+                  const completedValue = `${selectedHour}:${minute}`;
+                  setPendingValue(completedValue);
+                  onChange(completedValue);
+                  setOpen(false);
                 }}
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
