@@ -111,7 +111,7 @@ async def main() -> None:
             code="M",
             name="入金",
             description="店舗外で行う入金業務",
-            default_duration_minutes=45,
+            default_duration_minutes=30,
             requires_offsite=True,
             priority=10,
             is_active=True,
