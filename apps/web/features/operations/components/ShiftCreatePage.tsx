@@ -440,6 +440,8 @@ function TimeSelect({
   const [pendingValue, setPendingValue] = useState(normalizedValue);
   const [selectedHour, selectedMinute] = pendingValue.split(":");
   const containerRef = useRef<HTMLDivElement>(null);
+  const hourListRef = useRef<HTMLDivElement>(null);
+  const selectedHourRef = useRef<HTMLButtonElement>(null);
 
   const commitPendingValue = () => {
     onChange(pendingValue);
@@ -459,6 +461,15 @@ function TimeSelect({
     document.addEventListener("pointerdown", closeOnOutsidePointer, true);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [onChange, open, pendingValue]);
+
+  useEffect(() => {
+    if (!open || !hourListRef.current || !selectedHourRef.current) {
+      return;
+    }
+    const list = hourListRef.current;
+    const selected = selectedHourRef.current;
+    list.scrollTop = selected.offsetTop - (list.clientHeight - selected.offsetHeight) / 2;
+  }, [open]);
 
   return (
     <div
@@ -505,7 +516,7 @@ function TimeSelect({
           className="absolute left-0 z-30 mt-1 grid w-32 grid-cols-[1fr_52px] overflow-hidden rounded border bg-white shadow-lg"
           role="listbox"
         >
-          <div className="max-h-56 overflow-y-auto border-r py-1">
+          <div className="max-h-56 overflow-y-auto border-r py-1" ref={hourListRef}>
             {hourOptions.map((hour) => (
               <button
                 aria-selected={hour === selectedHour}
@@ -513,6 +524,7 @@ function TimeSelect({
                   hour === selectedHour ? "bg-neutral-950 text-white hover:bg-neutral-950" : ""
                 }`}
                 key={hour}
+                ref={hour === selectedHour ? selectedHourRef : undefined}
                 onClick={() => {
                   setPendingValue(`${hour}:${selectedMinute}`);
                 }}
