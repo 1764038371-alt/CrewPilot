@@ -423,13 +423,31 @@ function TimeSelect({
 }) {
   const [open, setOpen] = useState(false);
   const normalizedValue = normalizeTimeValue(value);
-  const [selectedHour, selectedMinute] = normalizedValue.split(":");
+  const [pendingValue, setPendingValue] = useState(normalizedValue);
+  const [selectedHour, selectedMinute] = pendingValue.split(":");
+
+  const commitPendingValue = () => {
+    onChange(pendingValue);
+    setOpen(false);
+  };
 
   return (
     <div
       className="relative inline-block w-24 text-left"
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          if (open) {
+            commitPendingValue();
+          }
+        }
+      }}
+      onKeyDown={(event) => {
+        if (open && event.key === "Enter") {
+          event.preventDefault();
+          commitPendingValue();
+        } else if (open && event.key === "Escape") {
+          event.preventDefault();
+          setPendingValue(normalizedValue);
           setOpen(false);
         }
       }}
@@ -439,7 +457,14 @@ function TimeSelect({
         aria-label={label}
         className="flex h-9 w-full items-center justify-between rounded border bg-white px-2 text-sm font-medium shadow-sm disabled:bg-neutral-100 disabled:text-neutral-400"
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (open) {
+            commitPendingValue();
+          } else {
+            setPendingValue(normalizedValue);
+            setOpen(true);
+          }
+        }}
         type="button"
       >
         <span>{normalizedValue}</span>
@@ -459,10 +484,7 @@ function TimeSelect({
                 }`}
                 key={hour}
                 onClick={() => {
-                  onChange(`${hour}:${selectedMinute}`);
-                  if (selectedMinute === "00") {
-                    setOpen(false);
-                  }
+                  setPendingValue(`${hour}:${selectedMinute}`);
                 }}
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
@@ -481,8 +503,7 @@ function TimeSelect({
                 }`}
                 key={minute}
                 onClick={() => {
-                  onChange(`${selectedHour}:${minute}`);
-                  setOpen(false);
+                  setPendingValue(`${selectedHour}:${minute}`);
                 }}
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
