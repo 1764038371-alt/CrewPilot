@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Archive, CalendarDays, CheckCircle2, ClipboardList, Copy, Lock, Redo2, RefreshCw, Rocket, Save, Send, Settings, Undo2 } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, ClipboardList, Copy, LogOut, Redo2, RefreshCw, Rocket, Save, Send, Settings, Undo2 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import type { CurrentUser } from "@/features/auth/api/authApi";
@@ -64,30 +64,26 @@ export function WorkspaceHeader({
   const planningPeriod = workspace?.planning_period;
 
   return (
-    <header className="flex h-24 shrink-0 items-center justify-between gap-3 border-b bg-white px-4">
-      <div className="min-w-56">
-        <div className="flex items-center gap-2 text-xs text-neutral-500">
-          <span>{workspace?.store.name ?? "CrewPilot"}</span>
-          <span>/</span>
-          <span className="max-w-28 truncate">{planningPeriodId}</span>
-        </div>
+    <header className="relative flex min-h-20 shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-white px-4 py-3">
+      <div className="min-w-48">
+        <div className="text-xs text-neutral-500">{workspace?.store.name ?? "CrewPilot"}</div>
         <h1 className="text-lg font-semibold">
           {workspace?.planning_period.name ?? "シフトWorkspace"}
         </h1>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-1 flex items-center gap-3">
           <Link
-            className="inline-flex h-8 items-center gap-1 rounded border bg-white px-2 text-xs text-neutral-700 hover:bg-neutral-50"
+            className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-950"
             href="/"
           >
             <Settings className="h-3.5 w-3.5" />
-            初期設定へ戻る
+            初期設定
           </Link>
           <Link
-            className="inline-flex h-8 items-center gap-1 rounded border bg-white px-2 text-xs text-neutral-700 hover:bg-neutral-50"
+            className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-950"
             href={`/planning-periods/${planningPeriodId}/create`}
           >
             <ClipboardList className="h-3.5 w-3.5" />
-            シフト希望入力へ戻る
+            希望入力
           </Link>
         </div>
       </div>
@@ -99,134 +95,123 @@ export function WorkspaceHeader({
         selectedDate={selectedDate}
         startDate={planningPeriod?.start_date}
       />
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        <span className="rounded border px-2 py-1 text-xs text-neutral-600">
-          {scheduleVersion ? `v${scheduleVersion.version_number} rev.${scheduleVersion.revision}` : "No version"}
-        </span>
-        <span className="rounded border px-2 py-1 text-xs text-neutral-600">
-          {workspace?.planning_period.status ?? "loading"}
-        </span>
-        <span className={publishStatusClassName(status)}>
-          {publishStatusLabel(status)}
-        </span>
-        <span
-          className={draftStatusClassName(draftStatus)}
-          title={draftError ?? undefined}
-        >
-          {draftStatusLabel(draftStatus, unsavedCount)}
-        </span>
-        <span className="rounded border px-2 py-1 text-xs text-neutral-600">
-          {currentUser ? `${currentUser.display_name} / ${currentUser.role}` : "Guest"}
-        </span>
-        {currentUser && (
-          <button
-            className="inline-flex h-9 items-center rounded border px-3 text-sm"
-            onClick={onLogout}
-            type="button"
+      <div className="flex min-w-[360px] flex-1 flex-col items-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className={publishStatusClassName(status)}>
+            {publishStatusLabel(status)}
+          </span>
+          <span
+            className={draftStatusClassName(draftStatus)}
+            title={draftError ?? undefined}
           >
-            ログアウト
-          </button>
-        )}
-        <button
-          className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
-          disabled={!onUndo || undoPending}
-          onClick={onUndo}
-          title="Undo (⌘Z / Ctrl+Z)"
-          type="button"
-        >
-          <Undo2 className="h-4 w-4" />
-          戻す
-        </button>
-        <button
-          className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
-          disabled={!onRedo || redoPending}
-          onClick={onRedo}
-          title="Redo (⌘⇧Z / Ctrl+Shift+Z)"
-          type="button"
-        >
-          <Redo2 className="h-4 w-4" />
-          やり直し
-        </button>
-        <button
-          className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
-          disabled={!canSave}
-          onClick={onSave}
-          title="保存 (⌘S / Ctrl+S)"
-          type="button"
-        >
-          <Save className="h-4 w-4" />
-          {draftStatus === "saving" ? "保存中" : "保存"}
-        </button>
-        {status === "draft" && (
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
-            disabled={!onApprove || actionPending || unsavedCount > 0 || isReadOnly}
-            onClick={onApprove}
-            title="確定"
-            type="button"
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            確定
-          </button>
-        )}
-        {(status === "draft" || status === "approved") && (
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
-            disabled={!onPublish || actionPending || unsavedCount > 0 || isReadOnly}
-            onClick={onPublish}
-            title="公開"
-            type="button"
-          >
-            <Send className="h-4 w-4" />
-            公開
-          </button>
-        )}
-        {(isPublished || status === "archived") && (
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
-            disabled={!onDuplicate || actionPending || currentUser?.role === "viewer"}
-            onClick={onDuplicate}
-            title="複製して編集再開"
-            type="button"
-          >
-            <Copy className="h-4 w-4" />
-            複製して編集
-          </button>
-        )}
-        {status !== "archived" && (
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
-            disabled={!onArchive || actionPending || currentUser?.role === "viewer"}
-            onClick={onArchive}
-            title="Archive"
-            type="button"
-          >
-            <Archive className="h-4 w-4" />
-            保管
-          </button>
-        )}
-        <span
-          className="inline-flex h-9 items-center gap-2 rounded border bg-neutral-50 px-3 text-sm text-neutral-600"
-          title={isReadOnly ? "公開済み、保管済み、または閲覧権限のため編集できません" : "編集できます"}
-        >
-          <Lock className="h-4 w-4" />
-          {isReadOnly ? "読取専用" : "編集可"}
-        </span>
-        <button
-          className="inline-flex h-9 items-center gap-2 rounded bg-neutral-950 px-3 text-sm text-white"
-          onClick={onAiClick}
-          title="右パネルのAI提案タブを開きます"
-          type="button"
-        >
-          {isFetching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-          AI提案を開く
-        </button>
-      </div>
-      {isPublished && (
-        <div className="absolute right-4 top-16 rounded border bg-white px-3 py-2 text-xs text-neutral-600 shadow-sm">
-          Published At: {scheduleVersion?.published_at ? formatDateTime(scheduleVersion.published_at) : "-"} / Published By:{" "}
-          {scheduleVersion?.published_by ?? "未設定"}
+            {draftStatusLabel(draftStatus, unsavedCount)}
+          </span>
+          {currentUser && (
+            <button
+              aria-label="ログアウト"
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+              onClick={onLogout}
+              title={`${currentUser.display_name}としてログイン中・ログアウト`}
+              type="button"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+            disabled={!onUndo || undoPending}
+            onClick={onUndo}
+            title="Undo (⌘Z / Ctrl+Z)"
+            type="button"
+          >
+            <Undo2 className="h-4 w-4" />
+            戻す
+          </button>
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+            disabled={!onRedo || redoPending}
+            onClick={onRedo}
+            title="Redo (⌘⇧Z / Ctrl+Shift+Z)"
+            type="button"
+          >
+            <Redo2 className="h-4 w-4" />
+            やり直し
+          </button>
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+            disabled={!canSave}
+            onClick={onSave}
+            title="保存 (⌘S / Ctrl+S)"
+            type="button"
+          >
+            <Save className="h-4 w-4" />
+            {draftStatus === "saving" ? "保存中" : "保存"}
+          </button>
+          {status === "draft" && (
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+              disabled={!onApprove || actionPending || unsavedCount > 0 || isReadOnly}
+              onClick={onApprove}
+              title="確定"
+              type="button"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              確定
+            </button>
+          )}
+          {(status === "draft" || status === "approved") && (
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+              disabled={!onPublish || actionPending || unsavedCount > 0 || isReadOnly}
+              onClick={onPublish}
+              title="公開"
+              type="button"
+            >
+              <Send className="h-4 w-4" />
+              公開
+            </button>
+          )}
+          {(isPublished || status === "archived") && (
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+              disabled={!onDuplicate || actionPending || currentUser?.role === "viewer"}
+              onClick={onDuplicate}
+              title="複製して編集再開"
+              type="button"
+            >
+              <Copy className="h-4 w-4" />
+              複製して編集
+            </button>
+          )}
+          {status !== "archived" && (
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded border px-3 text-sm disabled:bg-neutral-100 disabled:text-neutral-400"
+              disabled={!onArchive || actionPending || currentUser?.role === "viewer"}
+              onClick={onArchive}
+              title="Archive"
+              type="button"
+            >
+              <Archive className="h-4 w-4" />
+              保管
+            </button>
+          )}
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded bg-neutral-950 px-3 text-sm text-white"
+            onClick={onAiClick}
+            title="右パネルのAI提案タブを開きます"
+            type="button"
+          >
+            {isFetching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+            AI提案
+          </button>
+        </div>
+      </div>
+      {isPublished && scheduleVersion?.published_at && (
+        <span className="absolute bottom-1 right-4 text-[10px] text-neutral-400">
+          {formatDateTime(scheduleVersion.published_at)} 公開
+        </span>
       )}
     </header>
   );

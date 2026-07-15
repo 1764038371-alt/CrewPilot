@@ -336,8 +336,13 @@ function StaffSettings({
 }) {
   return (
     <section className="rounded border bg-white p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">従業員管理</h2>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">従業員管理</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            従業員番号は追加時に自動採番されます。名前はシフト画面の表示に使います。
+          </p>
+        </div>
         <button
           className="rounded border px-3 py-1 text-sm"
           onClick={() =>
@@ -455,29 +460,43 @@ function StaffRow({
         const skill = setup.skill_definitions.find((item) => item.code === column.code);
         const checked = Boolean(skill && staff.skill_definition_ids.includes(skill.id));
         return (
-          <td className="border p-2 text-center" key={column.code}>
-            <input
-              checked={checked}
-              disabled={!skill}
-              onChange={(event) => {
-                if (!skill) {
-                  return;
-                }
-                update({
-                  ...staff,
-                  skill_definition_ids: event.target.checked
-                    ? [...staff.skill_definition_ids, skill.id]
-                    : staff.skill_definition_ids.filter((id) => id !== skill.id),
-                  position_ids: nextPositionIds(staff, setup, skill, event.target.checked),
-                  can_deposit: column.code === "M" ? event.target.checked : staff.can_deposit
-                });
-              }}
-              type="checkbox"
-            />
+          <td className="border p-0 text-center" key={column.code}>
+            <label className={`flex min-h-11 w-full items-center justify-center ${skill ? "cursor-pointer hover:bg-neutral-50" : "cursor-not-allowed"}`}>
+              <input
+                aria-label={`${staff.display_name || staff.employee_number || "従業員"} ${column.label}`}
+                checked={checked}
+                className="h-5 w-5 cursor-pointer accent-neutral-950 disabled:cursor-not-allowed"
+                disabled={!skill}
+                onChange={(event) => {
+                  if (!skill) {
+                    return;
+                  }
+                  update({
+                    ...staff,
+                    skill_definition_ids: event.target.checked
+                      ? [...staff.skill_definition_ids, skill.id]
+                      : staff.skill_definition_ids.filter((id) => id !== skill.id),
+                    position_ids: nextPositionIds(staff, setup, skill, event.target.checked),
+                    can_deposit: column.code === "M" ? event.target.checked : staff.can_deposit
+                  });
+                }}
+                type="checkbox"
+              />
+            </label>
           </td>
         );
       })}
-      <td className="border p-2 text-center"><input checked={staff.is_active} onChange={(event) => update({ ...staff, is_active: event.target.checked })} type="checkbox" /></td>
+      <td className="border p-0 text-center">
+        <label className="flex min-h-11 w-full cursor-pointer items-center justify-center hover:bg-neutral-50">
+          <input
+            aria-label={`${staff.display_name || staff.employee_number || "従業員"} 有効`}
+            checked={staff.is_active}
+            className="h-5 w-5 cursor-pointer accent-neutral-950"
+            onChange={(event) => update({ ...staff, is_active: event.target.checked })}
+            type="checkbox"
+          />
+        </label>
+      </td>
       <td className="border p-2 text-center">
         <button
           className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
@@ -550,7 +569,12 @@ function SplitTimeSelect({
                   hour === selectedHour ? "bg-neutral-950 text-white hover:bg-neutral-950" : ""
                 }`}
                 key={hour}
-                onClick={() => onChange(`${hour}:${selectedMinute}`)}
+                onClick={() => {
+                  onChange(`${hour}:${selectedMinute}`);
+                  if (selectedMinute === "00") {
+                    setOpen(false);
+                  }
+                }}
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
                 type="button"

@@ -194,7 +194,7 @@ export function RightPanel({
         </PanelTabButton>
         <PanelTabButton active={activeTab === "lock"} onClick={() => setActiveTab("lock")}>
           <Lock className="h-3.5 w-3.5" />
-          Lock
+          固定
         </PanelTabButton>
         <PanelTabButton active={activeTab === "history"} onClick={() => setActiveTab("history")}>
           <History className="h-3.5 w-3.5" />
@@ -956,7 +956,7 @@ function LockPanel({
   const target = selectedSegment ?? selectedWorkShift;
   return (
     <section>
-      <h2 className="text-sm font-semibold">Lock</h2>
+      <h2 className="text-sm font-semibold">固定</h2>
       {target ? (
         <div className="mt-2 rounded border p-3 text-sm">
           <InfoRows

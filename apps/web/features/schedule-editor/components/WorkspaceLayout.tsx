@@ -19,7 +19,6 @@ import { useWorkspaceShortcuts } from "../hooks/useWorkspaceShortcuts";
 import { useWorkspaceQuery } from "../hooks/useWorkspaceQuery";
 import { getUnsavedDraftCount, useEditingStore } from "../store/editingStore";
 import { buildDraftCommands } from "../utils/draftCommands";
-import { LeftSidebar } from "./LeftSidebar";
 import { QuickEditBar } from "./QuickEditBar";
 import { RightPanel, type PanelTab } from "./RightPanel";
 import { ShiftGrid } from "./ShiftGrid";
@@ -256,8 +255,7 @@ export function WorkspaceLayout({ planningPeriodId, initialWorkspace }: Workspac
           </div>
         </section>
       ) : (
-        <section className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_320px] gap-px bg-neutral-200">
-          <LeftSidebar workspace={workspace} />
+        <section className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px] gap-px bg-neutral-200">
           <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-white">
             <QuickEditBar isReadOnly={isReadOnly} workspace={workspace} />
             <ShiftGrid

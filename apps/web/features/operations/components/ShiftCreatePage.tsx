@@ -34,8 +34,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
     staleTime: 0
   });
   const planningPeriod = setupQuery.data?.planning_period;
-  const defaultDate = planningPeriod?.start_date ?? new Date().toISOString().slice(0, 10);
-  const [targetDate, setTargetDate] = useState(defaultDate);
+  const [targetDate, setTargetDate] = useState("");
   const draftQuery = useQuery({
     queryKey: ["daily-draft", planningPeriodId, targetDate],
     queryFn: () => getDailyDraft(planningPeriodId, targetDate),
@@ -44,6 +43,20 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
     staleTime: 0
   });
   const [rows, setRows] = useState<RequestRow[]>([]);
+
+  useEffect(() => {
+    if (!planningPeriod) {
+      return;
+    }
+    const savedDate = window.localStorage.getItem(lastDateStorageKey(planningPeriodId));
+    setTargetDate(isDateInPlanningPeriod(savedDate, planningPeriod) ? savedDate : planningPeriod.start_date);
+  }, [planningPeriod, planningPeriodId]);
+
+  useEffect(() => {
+    if (targetDate && planningPeriod && isDateInPlanningPeriod(targetDate, planningPeriod)) {
+      window.localStorage.setItem(lastDateStorageKey(planningPeriodId), targetDate);
+    }
+  }, [planningPeriod, planningPeriodId, targetDate]);
 
   useEffect(() => {
     setRows([]);
@@ -99,6 +112,8 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
   const setup = setupQuery.data;
   const loadError = setupQuery.error ?? draftQuery.error;
   const staffMembers = sortStaffByEmployeeNumber(draftQuery.data?.staff_members ?? []);
+  const availableCount = rows.filter((row) => row.request_type === "available").length;
+  const offCount = rows.filter((row) => row.request_type === "off").length;
 
   return (
     <main className="min-h-screen bg-neutral-100 text-neutral-950">
@@ -158,10 +173,18 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
                 onClick={() => proposalMutation.mutate()}
                 type="button"
               >
-                {proposalMutation.isPending ? "AI提案中" : "AI提案"}
+                {proposalMutation.isPending ? "AI提案中" : "保存してAI提案"}
               </button>
             </div>
           </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <RequestSummaryItem label="勤務希望" value={`${availableCount}人`} />
+            <RequestSummaryItem label="休み希望" value={`${offCount}人`} />
+            <RequestSummaryItem label="登録スタッフ" value={`${staffMembers.length}人`} />
+          </div>
+          <p className="mt-2 text-xs text-neutral-500">
+            休み希望のスタッフはAIの割当対象外です。勤務希望だけ開始・終了時刻を選んでください。
+          </p>
           {saveMutation.isSuccess && <p className="mt-2 text-sm text-emerald-700">希望シフトを保存しました。</p>}
           {(saveMutation.isError || proposalMutation.isError) && (
             <div className="mt-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -213,7 +236,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
                 {rows.map((row, index) => {
                   const staff = draftQuery.data?.staff_members.find((item) => item.id === row.staff_member_id);
                   return (
-                    <tr key={row.staff_member_id}>
+                    <tr className={row.request_type === "off" ? "bg-neutral-50 text-neutral-400" : undefined} key={row.staff_member_id}>
                       <td className="border p-2 font-medium">{staffLabel(staff)}</td>
                       <td className="border p-2 text-neutral-500">{staffDisplayName(staff)}</td>
                       <td className="border p-2 text-center">
@@ -262,6 +285,15 @@ function shiftCreateErrorMessage(error: unknown) {
 
   const detail = formatApiErrorDetail(error);
   return detail ? `保存またはAI提案に失敗しました: ${detail}` : "保存またはAI提案に失敗しました。入力内容を確認してください。";
+}
+
+function RequestSummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border bg-neutral-50 px-3 py-2">
+      <div className="text-xs text-neutral-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold">{value}</div>
+    </div>
+  );
 }
 
 function shiftCreateLoadErrorMessage(error: unknown) {
@@ -426,7 +458,12 @@ function TimeSelect({
                   hour === selectedHour ? "bg-neutral-950 text-white hover:bg-neutral-950" : ""
                 }`}
                 key={hour}
-                onClick={() => onChange(`${hour}:${selectedMinute}`)}
+                onClick={() => {
+                  onChange(`${hour}:${selectedMinute}`);
+                  if (selectedMinute === "00") {
+                    setOpen(false);
+                  }
+                }}
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
                 type="button"
@@ -463,6 +500,17 @@ function TimeSelect({
 
 function buildHourOptions() {
   return Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
+}
+
+function lastDateStorageKey(planningPeriodId: Uuid) {
+  return `crewpilot:last-shift-date:${planningPeriodId}`;
+}
+
+function isDateInPlanningPeriod(
+  date: string | null,
+  planningPeriod: { start_date: string; end_date: string }
+): date is string {
+  return Boolean(date && date >= planningPeriod.start_date && date <= planningPeriod.end_date);
 }
 
 function normalizeTimeValue(value: string) {
