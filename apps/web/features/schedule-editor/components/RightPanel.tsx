@@ -176,32 +176,41 @@ export function RightPanel({
   const errorMessage = mutationError ? formatCommandError(mutationError) : null;
   const commandPending = saveStatus === "saving";
   const visibleWarnings = filterWarningsByDate(draftWorkspace, selectedDate);
+  const criticalWarnings = visibleWarnings.filter((warning) => warning.severity === "critical");
+
+  const selectWarning = (warning: ScheduleWarning) => {
+    setActiveWarning(warning.id, warning.shift_segment_id);
+    if (warning.shift_segment_id) {
+      selectShiftSegment(warning.shift_segment_id);
+      requestSegmentScroll(warning.shift_segment_id);
+      setActiveTab("details");
+      return;
+    }
+    if (warning.work_shift_id) {
+      selectWorkShift(warning.work_shift_id);
+      setActiveTab("details");
+    }
+  };
 
   return (
     <aside className="min-h-0 overflow-auto bg-white">
-      <div className="grid grid-cols-5 border-b text-xs">
-        <PanelTabButton active={activeTab === "warnings"} onClick={() => setActiveTab("warnings")}>
-          <TriangleAlert className="h-3.5 w-3.5" />
-          警告
+      <div className="grid grid-cols-2 border-b text-sm">
+        <PanelTabButton active={activeTab === "details"} onClick={() => setActiveTab("details")}>
+          <Info className="h-4 w-4" />
+          選択内容
         </PanelTabButton>
         <PanelTabButton active={activeTab === "proposals"} onClick={() => setActiveTab("proposals")}>
-          <Bot className="h-3.5 w-3.5" />
-          AI
-        </PanelTabButton>
-        <PanelTabButton active={activeTab === "details"} onClick={() => setActiveTab("details")}>
-          <Info className="h-3.5 w-3.5" />
-          詳細
-        </PanelTabButton>
-        <PanelTabButton active={activeTab === "lock"} onClick={() => setActiveTab("lock")}>
-          <Lock className="h-3.5 w-3.5" />
-          固定
-        </PanelTabButton>
-        <PanelTabButton active={activeTab === "history"} onClick={() => setActiveTab("history")}>
-          <History className="h-3.5 w-3.5" />
-          履歴
+          <Bot className="h-4 w-4" />
+          AI提案
         </PanelTabButton>
       </div>
       <div className="space-y-4 p-4">
+        <WarningSummary
+          criticalWarnings={criticalWarnings}
+          onOpenWarnings={() => setActiveTab("warnings")}
+          totalCount={visibleWarnings.length}
+        />
+        <SecondaryNavigation activeTab={activeTab} onSelect={setActiveTab} />
         <PanelGuide activeTab={activeTab} warningsCount={visibleWarnings.length} />
         {errorMessage && (
           <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -232,19 +241,7 @@ export function RightPanel({
         )}
         {activeTab === "warnings" && (
           <WarningsPanel
-            onSelectWarning={(warning) => {
-              setActiveWarning(warning.id, warning.shift_segment_id);
-              if (warning.shift_segment_id) {
-                selectShiftSegment(warning.shift_segment_id);
-                requestSegmentScroll(warning.shift_segment_id);
-                setActiveTab("details");
-                return;
-              }
-              if (warning.work_shift_id) {
-                selectWorkShift(warning.work_shift_id);
-                setActiveTab("details");
-              }
-            }}
+            onSelectWarning={selectWarning}
             warnings={visibleWarnings}
           />
         )}
@@ -268,19 +265,94 @@ export function RightPanel({
         {activeTab === "history" && (
           <HistoryPanel logs={historyQuery.data ?? []} runs={optimizationRunsQuery.data ?? []} />
         )}
-        <section>
-          <h2 className="text-sm font-semibold">読み取りサマリー</h2>
-          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
-            <dt className="text-neutral-500">Staff</dt>
+        <details className="rounded border border-neutral-200 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-neutral-700">シフト全体の情報</summary>
+          <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <dt className="text-neutral-500">登録スタッフ</dt>
             <dd className="text-right">{draftWorkspace?.staff_members.length ?? "-"}</dd>
-            <dt className="text-neutral-500">WorkShift</dt>
+            <dt className="text-neutral-500">勤務</dt>
             <dd className="text-right">{draftWorkspace?.work_shifts.length ?? "-"}</dd>
-            <dt className="text-neutral-500">Warning</dt>
+            <dt className="text-neutral-500">問題</dt>
             <dd className="text-right">{visibleWarnings.length}</dd>
           </dl>
-        </section>
+        </details>
       </div>
     </aside>
+  );
+}
+
+function WarningSummary({
+  criticalWarnings,
+  onOpenWarnings,
+  totalCount
+}: {
+  criticalWarnings: ScheduleWarning[];
+  onOpenWarnings: () => void;
+  totalCount: number;
+}) {
+  if (criticalWarnings.length > 0) {
+    return (
+      <button
+        className="w-full rounded-lg border border-red-300 bg-red-50 p-3 text-left text-red-900 hover:bg-red-100"
+        onClick={onOpenWarnings}
+        type="button"
+      >
+        <span className="flex items-center gap-2 font-semibold">
+          <TriangleAlert className="h-5 w-5" />
+          重大な問題が{criticalWarnings.length}件あります
+        </span>
+        <span className="mt-1 block text-xs">公開前に確認してください。クリックすると一覧を開きます。</span>
+      </button>
+    );
+  }
+  return (
+    <button
+      className="flex w-full items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-sm hover:bg-neutral-100"
+      onClick={onOpenWarnings}
+      type="button"
+    >
+      <span className="flex items-center gap-2 font-medium text-neutral-800">
+        <TriangleAlert className="h-4 w-4 text-amber-600" />
+        確認する問題
+      </span>
+      <span className="rounded-full bg-white px-2 py-0.5 text-xs text-neutral-700">{totalCount}件</span>
+    </button>
+  );
+}
+
+function SecondaryNavigation({
+  activeTab,
+  onSelect
+}: {
+  activeTab: PanelTab;
+  onSelect: (tab: PanelTab) => void;
+}) {
+  const items: Array<{ icon: ReactNode; label: string; tab: PanelTab }> = [
+    { icon: <TriangleAlert className="h-3.5 w-3.5" />, label: "問題一覧", tab: "warnings" },
+    { icon: <Lock className="h-3.5 w-3.5" />, label: "固定", tab: "lock" },
+    { icon: <History className="h-3.5 w-3.5" />, label: "履歴", tab: "history" }
+  ];
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-medium text-neutral-500">補助機能</p>
+      <div className="flex gap-1.5">
+        {items.map((item) => (
+          <button
+            className={
+              activeTab === item.tab
+                ? "flex items-center gap-1 rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs text-white"
+                : "flex items-center gap-1 rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-700 hover:bg-neutral-50"
+            }
+            key={item.tab}
+            onClick={() => onSelect(item.tab)}
+            type="button"
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -612,16 +684,16 @@ function WarningsPanel({
           {warnings.map((warning) => (
             <li key={warning.id}>
               <button
-                className="w-full rounded border border-amber-200 bg-amber-50 p-2 text-left hover:bg-amber-100"
+                className={`w-full rounded border p-2 text-left ${warningCardClassName(warning.severity)}`}
                 onClick={() => onSelectWarning(warning)}
                 type="button"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium">{warningTitle(warning)}</span>
-                  <span className="rounded bg-white/70 px-1.5 py-0.5 text-xs text-amber-800">{warningSeverityLabel(warning.severity)}</span>
+                  <span className="rounded bg-white/70 px-1.5 py-0.5 text-xs">{warningSeverityLabel(warning.severity)}</span>
                 </div>
                 <p className="mt-1 text-neutral-700">{warning.message}</p>
-                <p className="mt-1 text-xs text-amber-900">{warningTargetLabel(warning)}</p>
+                <p className="mt-1 text-xs">{warningTargetLabel(warning)}</p>
                 {warningFixHint(warning) && (
                   <p className="mt-1 rounded bg-white/70 px-2 py-1 text-xs text-neutral-700">
                     {warningFixHint(warning)}
@@ -636,6 +708,12 @@ function WarningsPanel({
       )}
     </section>
   );
+}
+
+function warningCardClassName(severity: string) {
+  return severity === "critical"
+    ? "border-red-300 bg-red-50 text-red-900 hover:bg-red-100"
+    : "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100";
 }
 
 function warningTitle(warning: ScheduleWarning) {
