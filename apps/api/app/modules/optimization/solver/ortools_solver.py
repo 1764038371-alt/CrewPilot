@@ -764,13 +764,11 @@ class ORToolsSolver(ScheduleSolver):
                     }
                 )
 
-        self._insert_break_segments(
-            planned,
-            request_rows,
-            positions_by_code,
-            skills,
-            staff_skills,
-        )
+        # Reserve the fixed deposit window before choosing breaks.  When breaks were
+        # inserted first, the only M-qualified employee could be sent on break at
+        # 10:00 and `_replace_with_special_segment` would then have no WORK segment
+        # to replace, silently leaving the deposit unassigned even though moving
+        # that break made a valid schedule possible.
         self._insert_deposit_segment(
             planned,
             target_date,
@@ -778,6 +776,13 @@ class ORToolsSolver(ScheduleSolver):
             skills,
             staff_skills,
             task_types,
+        )
+        self._insert_break_segments(
+            planned,
+            request_rows,
+            positions_by_code,
+            skills,
+            staff_skills,
         )
         self._rebuild_work_positions_by_exact_mix(
             planned,

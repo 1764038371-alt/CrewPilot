@@ -648,6 +648,32 @@ def test_duplicate_deposit_requirements_create_one_warning() -> None:
     assert warnings[0].warning_type == "DEPOSIT_COVERAGE"
 
 
+def test_saved_primary_deposit_clears_deposit_coverage_warning() -> None:
+    warning_service = WarningService(session=None)  # type: ignore[arg-type]
+    deposit_segment = SimpleNamespace(
+        id=SEGMENT_ID,
+        work_shift_id=SHIFT_ID,
+        segment_date=date(2026, 7, 1),
+        start_time=time(10),
+        end_time=time(10, 30),
+        segment_type="TASK",
+        position_id=None,
+        task_type_id=TASK_M_ID,
+    )
+
+    warnings = warning_service._deposit_warnings(
+        schedule_version_id=SHIFT_ID,
+        requirements=[requirement_for_task()],
+        shifts=[work_shift(start_time=time(6, 45), end_time=time(15, 45))],
+        segments=[deposit_segment],
+        skill_definitions=[task_skill()],
+        staff_skills=[staff_skill(SKILL_M_ID)],
+        store=store(),
+    )
+
+    assert warnings == []
+
+
 def test_deposit_is_not_assigned_to_staff_without_m_skill() -> None:
     solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
     changes = solver._build_deposit_task_changes(
@@ -1080,6 +1106,51 @@ def test_request_based_deposit_keeps_b_and_c_covered() -> None:
     assert {"B", "C"}.issubset(active_codes_during_deposit)
     assert "F" not in active_codes_during_deposit
     assert task_segment_count_at(changes, time(10, 15), TASK_M_ID) == 1
+
+
+def test_request_based_deposit_reserves_window_before_breaks() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    staff_ids = [
+        STAFF_ID,
+        STAFF_SECOND_ID,
+        UUID("30000000-0000-0000-0000-000000000003"),
+    ]
+    position_skill_ids = [SKILL_B_ID, SKILL_C_ID, SKILL_F_ID, SKILL_S_ID]
+
+    changes = solver._build_request_schedule_generation_changes(
+        scope=DateScope(type=OptimizationScopeType.DATE, date=date(2026, 7, 1)),
+        shifts=[],
+        requests=[
+            shift_request(staff_id, start_time=time(8), end_time=time(13))
+            for staff_id in staff_ids
+        ],
+        staff_members=[staff_member(staff_id) for staff_id in staff_ids],
+        positions=[
+            position(POSITION_B_ID, "B"),
+            position(POSITION_C_ID, "C"),
+            position(POSITION_F_ID, "F"),
+            position(POSITION_S_ID, "S"),
+        ],
+        skills=[
+            skill(SKILL_B_ID, POSITION_B_ID),
+            skill(SKILL_C_ID, POSITION_C_ID),
+            skill(SKILL_F_ID, POSITION_F_ID),
+            skill(SKILL_S_ID, POSITION_S_ID),
+            task_skill(),
+        ],
+        staff_skills=[
+            *[
+                staff_skill(skill_id, staff_id)
+                for staff_id in staff_ids
+                for skill_id in position_skill_ids
+            ],
+            staff_skill(SKILL_M_ID, STAFF_ID),
+        ],
+        task_types=[task_type_m()],
+    )
+
+    assert task_segment_count_at(changes, time(10, 15), TASK_M_ID) == 1
+    assert {"B", "C"}.issubset(active_position_codes_at(changes, time(10, 15)))
 
 
 def test_short_staffed_shift_places_break_when_third_staff_arrives() -> None:
