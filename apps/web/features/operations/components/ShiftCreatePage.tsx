@@ -122,7 +122,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
           <div>
             <h1 className="text-2xl font-semibold">シフト案作成</h1>
             <p className="mt-1 text-sm text-neutral-600">
-              日付を選び、店長が希望シフトを入力してからAI提案を作成します。
+              日付を選び、希望シフトを入力してシフト案を作成します。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
                 onClick={() => proposalMutation.mutate()}
                 type="button"
               >
-                {proposalMutation.isPending ? "AI提案中" : "保存してAI提案"}
+                {proposalMutation.isPending ? "シフト案を作成中" : "保存してシフト案を作成"}
               </button>
             </div>
           </div>
@@ -183,7 +183,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
             <RequestSummaryItem label="登録スタッフ" value={`${staffMembers.length}人`} />
           </div>
           <p className="mt-2 text-xs text-neutral-500">
-            休み希望のスタッフはAIの割当対象外です。勤務希望だけ開始・終了時刻を選んでください。
+            休み希望のスタッフは割当対象外です。勤務希望だけ開始・終了時刻を選んでください。
           </p>
           {saveMutation.isSuccess && <p className="mt-2 text-sm text-emerald-700">希望シフトを保存しました。</p>}
           {(saveMutation.isError || proposalMutation.isError) && (

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Archive, CalendarDays, CheckCircle2, ClipboardList, Copy, LogOut, Redo2, RefreshCw, Rocket, Save, Send, Settings, Undo2 } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, ClipboardList, Copy, LogOut, Redo2, Save, Send, Settings, Undo2 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import type { CurrentUser } from "@/features/auth/api/authApi";
@@ -9,7 +9,6 @@ import type { WorkspaceData } from "../types";
 type WorkspaceHeaderProps = {
   planningPeriodId: string;
   workspace?: WorkspaceData;
-  isFetching: boolean;
   canSave?: boolean;
   draftError?: string | null;
   draftStatus?: DraftSaveStatus;
@@ -20,7 +19,6 @@ type WorkspaceHeaderProps = {
   isReadOnly?: boolean;
   currentUser?: CurrentUser;
   selectedDate?: string;
-  onAiClick?: () => void;
   onSave?: () => void;
   onSelectedDateChange?: (date: string) => void;
   onUndo?: () => void;
@@ -35,7 +33,6 @@ type WorkspaceHeaderProps = {
 export function WorkspaceHeader({
   planningPeriodId,
   workspace,
-  isFetching,
   canSave = false,
   draftError,
   draftStatus = "saved",
@@ -46,7 +43,6 @@ export function WorkspaceHeader({
   isReadOnly = false,
   currentUser,
   selectedDate,
-  onAiClick,
   onSave,
   onSelectedDateChange,
   onUndo,
@@ -197,15 +193,6 @@ export function WorkspaceHeader({
               保管
             </button>
           )}
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded bg-neutral-950 px-3 text-sm text-white"
-            onClick={onAiClick}
-            title="右パネルのAI提案タブを開きます"
-            type="button"
-          >
-            {isFetching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-            AI提案
-          </button>
         </div>
       </div>
       {isPublished && scheduleVersion?.published_at && (

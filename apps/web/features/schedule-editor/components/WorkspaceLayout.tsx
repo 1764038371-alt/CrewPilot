@@ -205,7 +205,6 @@ export function WorkspaceLayout({ planningPeriodId, initialWorkspace }: Workspac
   return (
     <main className="flex h-screen min-h-[720px] flex-col overflow-hidden bg-neutral-100 text-neutral-950">
       <WorkspaceHeader
-        isFetching={workspaceQuery.isFetching}
         canSave={unsavedCount > 0 && !saveMutation.isPending && !isReadOnly}
         actionPending={actionPending}
         currentUser={authQuery.data}
@@ -218,7 +217,6 @@ export function WorkspaceLayout({ planningPeriodId, initialWorkspace }: Workspac
             archiveMutation.mutate();
           }
         }}
-        onAiClick={() => setRightPanelTab("proposals")}
         onDuplicate={() => duplicateMutation.mutate()}
         onLogout={() => logoutMutation.mutate()}
         onPublish={() => publishMutation.mutate()}

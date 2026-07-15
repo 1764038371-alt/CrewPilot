@@ -1,10 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Bot,
   Download,
   GitMerge,
   History,
-  Info,
   Lock,
   Save,
   Scissors,
@@ -194,16 +192,6 @@ export function RightPanel({
 
   return (
     <aside className="min-h-0 overflow-auto bg-white">
-      <div className="grid grid-cols-2 border-b text-sm">
-        <PanelTabButton active={activeTab === "details"} onClick={() => setActiveTab("details")}>
-          <Info className="h-4 w-4" />
-          選択内容
-        </PanelTabButton>
-        <PanelTabButton active={activeTab === "proposals"} onClick={() => setActiveTab("proposals")}>
-          <Bot className="h-4 w-4" />
-          AI提案
-        </PanelTabButton>
-      </div>
       <div className="space-y-4 p-4">
         <WarningSummary
           criticalWarnings={criticalWarnings}
@@ -768,7 +756,7 @@ function warningTargetLabel(warning: ScheduleWarning) {
 
 function warningFixHint(warning: ScheduleWarning) {
   if (warning.warning_type === "STAFF_SHORTAGE") {
-    return "対処: この時間帯に勤務を追加するか、AI提案で不足時間帯を再生成します。";
+    return "対処: この時間帯に勤務を追加するか、希望入力からシフト案を作り直します。";
   }
   if (warning.warning_type === "BC_COVERAGE") {
     return "対処: この時間帯でB / バリとC / キャッシャーが両方残るよう、ポジションまたは休憩位置を調整します。";
@@ -1379,30 +1367,6 @@ function proposalHighlights(proposal: OptimizationProposal) {
     }
   }
   return highlights;
-}
-
-function PanelTabButton({
-  active,
-  children,
-  onClick
-}: {
-  active: boolean;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={
-        active
-          ? "flex items-center justify-center gap-1 border-r bg-neutral-950 px-2 py-2 text-white"
-          : "flex items-center justify-center gap-1 border-r px-2 py-2"
-      }
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
-  );
 }
 
 function WorkShiftEditor({
