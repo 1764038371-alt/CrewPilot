@@ -31,6 +31,7 @@ IDEAL_POSITION_BLOCK_MINUTES = 120
 SOFT_MAX_POSITION_BLOCK_MINUTES = 150
 HARD_MAX_POSITION_BLOCK_MINUTES = 150
 BREAK_SHIFT_EDGE_BUFFER_MINUTES = 120
+MIN_BREAK_SHIFT_EDGE_BUFFER_MINUTES = 105
 AVAILABLE_REQUEST_TYPES = {"available", "preferred", "ok"}
 BLOCKING_REQUEST_TYPES = {"unavailable", "off", "ng"}
 
@@ -1246,10 +1247,22 @@ class ORToolsSolver(ScheduleSolver):
         positions_by_code: dict[str, Position],
         skills: list[SkillDefinition],
         staff_skills: list[StaffSkill],
+        edge_buffer_minutes: int = BREAK_SHIFT_EDGE_BUFFER_MINUTES,
     ) -> tuple[time, time] | None:
-        shift_allowed_start = time_to_minutes(request.start_time) + BREAK_SHIFT_EDGE_BUFFER_MINUTES
-        shift_allowed_end = time_to_minutes(request.end_time) - BREAK_SHIFT_EDGE_BUFFER_MINUTES
+        shift_allowed_start = time_to_minutes(request.start_time) + edge_buffer_minutes
+        shift_allowed_end = time_to_minutes(request.end_time) - edge_buffer_minutes
         if shift_allowed_end - shift_allowed_start < break_minutes:
+            if edge_buffer_minutes > MIN_BREAK_SHIFT_EDGE_BUFFER_MINUTES:
+                return self._choose_break_window(
+                    planned,
+                    request,
+                    break_minutes,
+                    preferred_center,
+                    positions_by_code,
+                    skills,
+                    staff_skills,
+                    MIN_BREAK_SHIFT_EDGE_BUFFER_MINUTES,
+                )
             return None
         work_segments = [
             segment
@@ -1326,6 +1339,17 @@ class ORToolsSolver(ScheduleSolver):
                 )
                 candidates.append((score, break_start, break_end))
         if not candidates:
+            if edge_buffer_minutes > MIN_BREAK_SHIFT_EDGE_BUFFER_MINUTES:
+                return self._choose_break_window(
+                    planned,
+                    request,
+                    break_minutes,
+                    preferred_center,
+                    positions_by_code,
+                    skills,
+                    staff_skills,
+                    MIN_BREAK_SHIFT_EDGE_BUFFER_MINUTES,
+                )
             return None
         _, break_start, break_end = min(candidates, key=lambda item: item[0])
         return break_start, break_end

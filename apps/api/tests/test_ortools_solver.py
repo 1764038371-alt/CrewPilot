@@ -630,6 +630,24 @@ def test_deposit_warning_is_critical_when_primary_and_fallback_are_impossible() 
     assert warnings[0].severity == "critical"
 
 
+def test_duplicate_deposit_requirements_create_one_warning() -> None:
+    warning_service = WarningService(session=None)  # type: ignore[arg-type]
+    requirement = requirement_for_task()
+
+    warnings = warning_service._deposit_warnings(
+        schedule_version_id=SHIFT_ID,
+        requirements=[requirement, requirement],
+        shifts=[],
+        segments=[],
+        skill_definitions=[task_skill()],
+        staff_skills=[],
+        store=store(),
+    )
+
+    assert len(warnings) == 1
+    assert warnings[0].warning_type == "DEPOSIT_COVERAGE"
+
+
 def test_deposit_is_not_assigned_to_staff_without_m_skill() -> None:
     solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
     changes = solver._build_deposit_task_changes(
@@ -1026,8 +1044,6 @@ def test_request_based_deposit_keeps_b_and_c_covered() -> None:
         STAFF_ID,
         STAFF_SECOND_ID,
         UUID("30000000-0000-0000-0000-000000000003"),
-        UUID("30000000-0000-0000-0000-000000000004"),
-        UUID("30000000-0000-0000-0000-000000000005"),
     ]
 
     changes = solver._build_request_schedule_generation_changes(
@@ -1062,7 +1078,36 @@ def test_request_based_deposit_keeps_b_and_c_covered() -> None:
     active_codes_during_deposit = active_position_codes_at(changes, time(10, 15))
 
     assert {"B", "C"}.issubset(active_codes_during_deposit)
+    assert "F" not in active_codes_during_deposit
     assert task_segment_count_at(changes, time(10, 15), TASK_M_ID) == 1
+
+
+def test_short_staffed_shift_places_break_when_third_staff_arrives() -> None:
+    solver = ORToolsSolver(session=None)  # type: ignore[arg-type]
+    third_staff_id = UUID("30000000-0000-0000-0000-000000000003")
+    planned = {
+        STAFF_ID: [planned_work("B", POSITION_B_ID, time(6, 45), time(11))],
+        STAFF_SECOND_ID: [planned_work("C", POSITION_C_ID, time(6, 45), time(16))],
+        third_staff_id: [planned_work("B", POSITION_B_ID, time(9), time(14))],
+    }
+
+    break_window = solver._choose_break_window(
+        planned,
+        SimpleNamespace(
+            staff_member_id=STAFF_ID,
+            start_time=time(6, 45),
+            end_time=time(11),
+        ),
+        break_minutes=15,
+        preferred_center=round((6 * 60 + 45 + 11 * 60) / 2),
+        positions_by_code=positions_by_code(),
+        skills=all_position_skills(),
+        staff_skills=all_position_staff_skills(
+            [STAFF_ID, STAFF_SECOND_ID, third_staff_id]
+        ),
+    )
+
+    assert break_window == (time(9), time(9, 15))
 
 
 def test_break_is_not_scheduled_when_it_would_remove_b_or_c_coverage() -> None:

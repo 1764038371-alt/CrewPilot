@@ -720,6 +720,8 @@ function warningTitle(warning: ScheduleWarning) {
     CLOSING_STAFF_SHORTAGE: "クローズ人数不足",
     DEPOSIT_INVALID_TIME: "入金Mの時間違反",
     DEPOSIT_MISSING: "入金Mの担当不足",
+    DEPOSIT_COVERAGE: "入金Mの未配置",
+    DEPOSIT_DUPLICATE: "入金Mの重複",
     OPEN_CLOSE_SKILL_SHORTAGE: "開店/閉店スキル不足",
     OPENING_STAFF_SHORTAGE: "開店人数不足",
     REQUEST_VIOLATION: "希望シフト違反",

@@ -11,7 +11,8 @@ from app.modules.planning.models import ShiftRequest, ShiftRequirement
 from app.modules.schedule.models import ScheduleVersion, ScheduleWarning, ShiftSegment, WorkShift
 from app.modules.stores.models import Position, SkillDefinition, StaffSkill, Store
 
-BREAK_SHIFT_EDGE_BUFFER_MINUTES = 120
+# Two hours is preferred; a 15-minute adjustment is acceptable when staffing is tight.
+BREAK_SHIFT_EDGE_BUFFER_MINUTES = 105
 
 
 class WarningService:
@@ -336,10 +337,24 @@ class WarningService:
         staff_skills: list[StaffSkill],
         store: Store | None,
     ) -> list[ScheduleWarning]:
-        deposit_requirements = [
-            requirement for requirement in requirements if requirement.requirement_type == "TASK"
-        ]
         deposit_skill_ids = {skill.id for skill in skill_definitions if skill.code == "M"}
+        deposit_task_type_ids = {
+            skill.task_type_id
+            for skill in skill_definitions
+            if skill.code == "M" and skill.task_type_id is not None
+        }
+        unique_deposit_requirements: dict[tuple[date, UUID | None], ShiftRequirement] = {}
+        for requirement in requirements:
+            if (
+                requirement.requirement_type != "TASK"
+                or requirement.task_type_id not in deposit_task_type_ids
+            ):
+                continue
+            unique_deposit_requirements.setdefault(
+                (requirement.requirement_date, requirement.task_type_id),
+                requirement,
+            )
+        deposit_requirements = list(unique_deposit_requirements.values())
         if not deposit_requirements or not deposit_skill_ids:
             return []
         staff_with_deposit = {
@@ -459,7 +474,7 @@ class WarningService:
                             shift_segment_id=segment.id,
                             warning_type="BREAK_VIOLATION",
                             severity="warning",
-                            message="休憩が勤務開始または退勤の2時間以内に入っています。",
+                            message="休憩が勤務開始または退勤に近すぎます。",
                             details={
                                 "break_start": segment.start_time.isoformat(),
                                 "break_end": segment.end_time.isoformat(),
