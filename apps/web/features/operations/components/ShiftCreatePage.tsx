@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { LogoutButton } from "@/features/auth/components/LogoutButton";
 import { applyProposal, generateProposal } from "@/features/schedule-editor/api/proposalApi";
 import type { StaffMember, Uuid } from "@/features/schedule-editor/types";
 import { positionDisplayLabel } from "@/features/schedule-editor/utils/positionLabels";
@@ -135,6 +136,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
             >
               Workspace
             </Link>
+            <LogoutButton />
           </div>
         </header>
         <section className="mt-6 rounded border bg-white p-4">

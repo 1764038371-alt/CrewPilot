@@ -105,12 +105,13 @@ export function WorkspaceHeader({
           {currentUser && (
             <button
               aria-label="ログアウト"
-              className="inline-flex h-7 w-7 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+              className="inline-flex h-9 items-center gap-2 rounded border border-neutral-300 bg-white px-3 text-sm text-neutral-700 hover:bg-neutral-50"
               onClick={onLogout}
               title={`${currentUser.display_name}としてログイン中・ログアウト`}
               type="button"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-4 w-4" />
+              ログアウト
             </button>
           )}
         </div>

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { LogoutButton } from "@/features/auth/components/LogoutButton";
 import { getSetup, saveSetup, type SetupWrite, type StaffSetupWrite } from "../api/operationsApi";
 import type { SetupData, StaffSkillRead } from "../api/operationsApi";
 import type { Position, SkillDefinition, StaffMember } from "@/features/schedule-editor/types";
@@ -87,6 +88,7 @@ export function SetupFlowPage({ initialSetup }: { initialSetup?: SetupData | nul
             >
               シフト案作成へ
             </Link>
+            <LogoutButton />
           </div>
         </header>
         {saveMutation.isError && (
