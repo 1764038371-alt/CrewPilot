@@ -71,7 +71,7 @@ export function ShiftCreatePage({ planningPeriodId }: ShiftCreatePageProps) {
         const request = draftQuery.data.shift_requests.find((item) => item.staff_member_id === staff.id);
         return {
           staff_member_id: staff.id,
-          request_type: request?.request_type === "off" ? "off" : "available",
+          request_type: request?.request_type === "available" ? "available" : "off",
           start_time: request?.start_time?.slice(0, 5) ?? "09:00",
           end_time: request?.end_time?.slice(0, 5) ?? "17:00"
         };
